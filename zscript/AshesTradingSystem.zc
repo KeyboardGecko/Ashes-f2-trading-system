@@ -283,6 +283,7 @@ class TradeTextUtil : Object
 		items.Push('Good trade.');
 		items.Push('Okay.');
 		items.Push('Fine.');
+		items.Push('Good.');
 		items.Push('Deal.');
 		items.Push('Deal. Anything else?');
 		items.Push('Pleasure doing business.');
@@ -789,7 +790,7 @@ class TraderStateHandler : EventHandler
 			trader.items.Push(rebuilt[j]);
 		}
 
-		Console.Printf("SetLiveTraderStock key=%s items=%d", key, trader.items.Size());
+// 		Console.Printf("SetLiveTraderStock key=%s items=%d", key, trader.items.Size());
 	}
 
 	String FindKeyByNetId(int id)
