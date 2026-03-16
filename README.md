@@ -1,7 +1,5 @@
 # Ashes-f2-trading-system
 
-![mainterface](https://github.com/KeyboardGecko/Ashes-f2-trading-system/edit/main/ts.png)
-
 A trading system just like in fallout 2? IN MY ASHES? YES PLEASE!
 
 Refer to TRADERS and TRADEITEMS for how-to.
