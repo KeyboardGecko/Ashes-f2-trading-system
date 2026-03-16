@@ -1,101 +1,9 @@
 
 // ============================================================
-// Conversation menu FOR HR! TEMPORARY! FOR TESTING PURPOSES!
+// Conversation menu for strife dialog.
 // ============================================================
 class NewConversationMenu : ConversationMenu
 {
-	StrifeDialogueNode _prev;
-	DialogUIOverlay o;
-
-	override int Init(StrifeDialogueNode CurNode, PlayerInfo player, int activereply)
-	{
-		int r = Super.Init(CurNode, player, activereply);
-
-		o = DialogUIOverlay.Get();
-		if (!o) return r;
-
-		o.EnsureStatic();
-		o.BeginConversationStatic();
-		
-		o.HeartbeatStatic();
-
-		o.SetFallbackBackdropStatic(CurNode ? CurNode.Backdrop : "");
-
-		// No PlayNodeVoice here. Only schedule unified start.
-		let pl = players[consoleplayer];
-		if (pl && pl.mo && CurNode)
-		{
-			let npc = pl.ConversationNPC;
-			if (npc)
-			{
-				double vol = 1.0;
-				let cvVol = CVar.GetCVar('jm_voice_volume', players[consoleplayer]);
-				if (cvVol) vol = clamp(cvVol.GetFloat(), 0.0, 1.0);
-
-				DialogUIOverlay.ScheduleSyncStartStatic(npc, CurNode.SpeakerVoice, vol, CHAN_5);
-			}
-			else
-			{
-				o.ShowVoiceStatic(CurNode.SpeakerVoice);
-			}
-		}
-		else if (CurNode)
-		{
-			o.ShowVoiceStatic(CurNode.SpeakerVoice);
-		}
-
-		_prev = CurNode;
-		return r;
-	}
-
-	override void Ticker()
-	{
-		Super.Ticker();
-		o.HeartbeatStatic();
-
-		if (mCurNode != _prev)
-		{
-			String voice = ""; 
-			String backdrop = ""; 
-
-			if (mCurNode != null) {
-				voice = mCurNode.SpeakerVoice; 
-				backdrop = mCurNode.Backdrop;
-			}
-			o.SetFallbackBackdropStatic(backdrop);
-
-			let pl = players[consoleplayer];
-			if (pl && pl.mo && mCurNode)
-			{
-				let npc = pl.ConversationNPC;
-				if (npc)
-				{
-					double vol = 1.0;
-					let cvVol = CVar.GetCVar('jm_voice_volume', players[consoleplayer]);
-					if (cvVol) vol = clamp(cvVol.GetFloat(), 0.0, 1.0);
-
-					DialogUIOverlay.ScheduleSyncStartStatic(npc, voice, vol, CHAN_5);
-				}
-				else
-				{
-					o.ShowVoiceStatic(voice);
-				}
-			}
-			else
-			{
-				o.ShowVoiceStatic(voice);
-			}
-
-			_prev = mCurNode;
-		}
-
-		if (mCurNode == null)
-		{
-			o.EndConversationStatic();
-		}
-	}
-
-	override bool DrawBackdrop() { return true; }
 
 	StrifeDialogueReply GetReplyByIndex(int replynum)
 	{
@@ -114,7 +22,7 @@ class NewConversationMenu : ConversationMenu
 
 		return null;
 	}
-
+	
 	String ExtractTradeKey(String txt)
 	{
 		int tagPos = txt.IndexOf("[trade ");
@@ -240,11 +148,11 @@ class NewConversationMenu : ConversationMenu
 		let goodbyestr = mCurNode.Goodbye;
 		if (goodbyestr.Length() == 0)
 		{
-			goodbyestr = String.Format("$TXT_RANDOMGOODBYE_%d", CRandom[RandomSpeech](1, NUM_RANDOM_GOODBYES));
+			goodbyestr = String.Format("$TXT_RANDOMGOODBYE_%d", Random(1, NUM_RANDOM_GOODBYES));		
 		}
 		else if (goodbyestr.Left(7) == "RANDOM_")
 		{
-			goodbyestr = String.Format("$TXT_%s_%02d", goodbyestr, CRandom[RandomSpeech](1, NUM_RANDOM_LINES));
+			goodbyestr = String.Format("$TXT_%s_%02d", goodbyestr, Random(1, NUM_RANDOM_LINES));
 		}
 		goodbyestr = StringTable.Localize(goodbyestr);
 		if (goodbyestr.Length() == 0 || goodbyestr.Left(1) == "$") goodbyestr = "Bye.";
@@ -1348,6 +1256,7 @@ class TradeQuantityDialog : Object
 {
 	bool visible;
 	double drawScale;
+	String typedQuantity;
 	
 	int x;
 	int y;
@@ -1409,6 +1318,7 @@ class TradeQuantityDialog : Object
 		itemIcon = entry.icon;
 		maxQuantity = maxCount;
 		quantity = 1;
+		typedQuantity = "";
 
 		Layout(screenW, screenH);
 		visible = true;
@@ -1421,7 +1331,72 @@ class TradeQuantityDialog : Object
 		maxQuantity = 0;
 		itemClass = '';
 		itemPrice = 0;
+		typedQuantity = "";
 		itemIcon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
+	}
+
+	// helpers
+	
+	void ClampQuantity()
+	{
+		if (quantity < 1)
+			quantity = 1;
+
+		if (quantity > maxQuantity)
+			quantity = maxQuantity;
+	}
+
+	void RebuildQuantityFromTyped()
+	{
+		if (typedQuantity == "")
+		{
+			quantity = 1;
+			return;
+		}
+
+		int value = typedQuantity.ToInt();
+
+		if (value < 1)
+			value = 1;
+
+		if (value > maxQuantity)
+			value = maxQuantity;
+
+		quantity = value;
+	}
+
+	void AppendDigit(int digit)
+	{
+		if (digit < 0 || digit > 9)
+			return;
+
+		// if 0 first, causes problems. So don't start with 0
+		if (typedQuantity == "" && digit == 0)
+			return;
+
+		typedQuantity = typedQuantity .. digit;
+		RebuildQuantityFromTyped();
+	}
+
+	void BackspaceDigit()
+	{
+		int len = typedQuantity.Length();
+
+		if (len <= 0)
+		{
+			quantity = 1;
+			return;
+		}
+
+		if (len == 1)
+		{
+			typedQuantity = "";
+			quantity = 1;
+			return;
+		}
+
+		typedQuantity = typedQuantity.Left(len - 1);
+		RebuildQuantityFromTyped();
 	}
 
 	bool IsInside(int mx, int my)
@@ -1433,18 +1408,23 @@ class TradeQuantityDialog : Object
 
 	void AddOne()
 	{
+		typedQuantity = "";
+
 		if (quantity < maxQuantity)
 			quantity++;
 	}
 
 	void RemoveOne()
 	{
+		typedQuantity = "";
+
 		if (quantity > 1)
 			quantity--;
 	}
 
 	void SetAll()
 	{
+		typedQuantity = "";
 		quantity = maxQuantity;
 	}
 
@@ -2755,6 +2735,18 @@ class TradeUIOverlay : EventHandler
 			CancelQuantityDialog();
 			return;
 		}
+		
+		if (e.Name == "qty_digit")
+		{
+			qtyDialog.AppendDigit(e.Args[0]);
+			return;
+		}
+
+		if (e.Name == "qty_backspace")
+		{
+			qtyDialog.BackspaceDigit();
+			return;
+		}
 	}
 
 	bool ProcessButtonClick(TradeUIButton button)
@@ -2810,6 +2802,24 @@ class TradeUIOverlay : EventHandler
 
 			if (e.Type == UiEvent.Type_KeyDown)
 			{
+				if (e.KeyChar >= 48 && e.KeyChar <= 57) // 0..9
+				{
+					SendNetworkEvent("qty_digit", e.KeyChar - 48);
+					return true;
+				}
+
+				if (e.KeyChar == 8) // Backspace
+				{
+					SendNetworkEvent("qty_backspace");
+					return true;
+				}
+
+				if (e.KeyChar == 13) // Enter
+				{
+					SendNetworkEvent("qty_ok");
+					return true;
+				}
+
 				if (e.KeyChar == 27) // ESC
 				{
 					SendNetworkEvent("qty_cancel");
@@ -2819,7 +2829,7 @@ class TradeUIOverlay : EventHandler
 
 			return true;
 		}
-
+		
 		if (e.Type == UiEvent.Type_MouseMove)
 		{
 			cursor.SetPos(e.MouseX, e.MouseY);
