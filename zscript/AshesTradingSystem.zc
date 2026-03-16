@@ -85,7 +85,7 @@ class NewConversationMenu : ConversationMenu
 					if (traderKey != "")
 					{
 						int traderId = TradeDrawUtil.TraderKeyToNetId(traderKey);
-						Console.Printf("trade key=%s id=%d", traderKey, traderId);
+// 						Console.Printf("trade key=%s id=%d", traderKey, traderId);
 
 						EventHandler.SendNetworkEvent("open_tradeui_id", traderId);
 
@@ -706,7 +706,7 @@ class TraderStateHandler : EventHandler
 			outItems.Push(entry);
 		}
 
-		Console.Printf("BuildTraderStock result items=%d", outItems.Size());
+// 		Console.Printf("BuildTraderStock result items=%d", outItems.Size());
 	}
 
 	int GetLiveTraderItemPrice(String key, Name cls)
@@ -1942,7 +1942,7 @@ class TradeUIOverlay : EventHandler
 			AddTradeWhitelistItem(cls, displayName, description, price, iconName);
 		}
 
-		Console.Printf("TRADEITEMS loaded: %d", tradeWhitelist.Size());
+// 		Console.Printf("TRADEITEMS loaded: %d", tradeWhitelist.Size());
 
 		if (tradeWhitelist.Size() == 0)
 		{
@@ -1976,7 +1976,7 @@ class TradeUIOverlay : EventHandler
 		
 		currentTraderKey = traderKey;
 
-		Console.Printf("OpenForTraderKey: %s", traderKey);
+// 		Console.Printf("OpenForTraderKey: %s", traderKey);
 				
 		let nstate = TraderStateHandler.Get();
 		if (nstate != null)
@@ -1988,7 +1988,7 @@ class TradeUIOverlay : EventHandler
 			Console.Printf("OpenForTraderKey: TraderStateHandler is null");
 		}
 
-		Console.Printf("OpenForTraderKey: traderStock=%d", traderStock.Size());
+// 		Console.Printf("OpenForTraderKey: traderStock=%d", traderStock.Size());
 
 		let p = players[consoleplayer];
 		if (p && p.mo)
@@ -2673,7 +2673,7 @@ class TradeUIOverlay : EventHandler
 				String key = reg.FindKeyByNetId(e.Args[0]);
 				if (key != "")
 				{
-					Console.Printf("Opening trader by id: %d -> %s", e.Args[0], key);
+// 					Console.Printf("Opening trader by id: %d -> %s", e.Args[0], key);
 					OpenForTraderKey(key);
 				}
 				else
@@ -2686,11 +2686,10 @@ class TradeUIOverlay : EventHandler
 			
 		if (e.Name == "open_tradeui_for")
 		{
-			Console.printf("Opening");
 			let p = players[consoleplayer];
 			if (p != null && p.ConversationNPC != null)
 			{
-				Console.printf("Trader:, %s", p.ConversationNPC);
+// 				Console.printf("Trader:, %s", p.ConversationNPC);
 				OpenForTraderActor(p.ConversationNPC);
 			}
 			else
