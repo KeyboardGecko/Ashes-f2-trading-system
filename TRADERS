@@ -1,0 +1,30 @@
+// here be shops - unique key + assortment
+// to call the shop in dialog, add [trade KEY] to the dialog reply.
+// example: in LANGUAGE - TXT_WALKER_207 = "Let me see what you have. [trade Vance]";
+// in the conversation you'll see only "Let me see what you have.". Press it -
+// and boom, you trade Vance. You can add "SecretVance"  shop with other stock
+// and trade it from another line in the dialog. THE POSSIBILITIES ARE ENLESS
+
+trader Vance
+{
+    policepistol, 1
+    ninemilammo, 20
+    shotgunammo, 10
+	chips, 250
+
+}
+
+trader Jimmy
+{
+    chips, 160
+    bowammo, 8
+	firstaid, 4
+	policepistol, 1
+    ninemilammo, 20
+    shotgunammo, 10
+	pipebomb, 2
+	XBOW, 1
+	rifleammo, 30
+	thumperammo, 1
+
+}

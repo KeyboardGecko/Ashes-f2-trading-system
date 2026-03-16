@@ -1,0 +1,3028 @@
+
+// ============================================================
+// Conversation menu FOR HR! TEMPORARY! FOR TESTING PURPOSES!
+// ============================================================
+class NewConversationMenu : ConversationMenu
+{
+	StrifeDialogueNode _prev;
+	DialogUIOverlay o;
+
+	override int Init(StrifeDialogueNode CurNode, PlayerInfo player, int activereply)
+	{
+		int r = Super.Init(CurNode, player, activereply);
+
+		o = DialogUIOverlay.Get();
+		if (!o) return r;
+
+		o.EnsureStatic();
+		o.BeginConversationStatic();
+		
+		o.HeartbeatStatic();
+
+		o.SetFallbackBackdropStatic(CurNode ? CurNode.Backdrop : "");
+
+		// No PlayNodeVoice here. Only schedule unified start.
+		let pl = players[consoleplayer];
+		if (pl && pl.mo && CurNode)
+		{
+			let npc = pl.ConversationNPC;
+			if (npc)
+			{
+				double vol = 1.0;
+				let cvVol = CVar.GetCVar('jm_voice_volume', players[consoleplayer]);
+				if (cvVol) vol = clamp(cvVol.GetFloat(), 0.0, 1.0);
+
+				DialogUIOverlay.ScheduleSyncStartStatic(npc, CurNode.SpeakerVoice, vol, CHAN_5);
+			}
+			else
+			{
+				o.ShowVoiceStatic(CurNode.SpeakerVoice);
+			}
+		}
+		else if (CurNode)
+		{
+			o.ShowVoiceStatic(CurNode.SpeakerVoice);
+		}
+
+		_prev = CurNode;
+		return r;
+	}
+
+	override void Ticker()
+	{
+		Super.Ticker();
+		o.HeartbeatStatic();
+
+		if (mCurNode != _prev)
+		{
+			String voice = ""; 
+			String backdrop = ""; 
+
+			if (mCurNode != null) {
+				voice = mCurNode.SpeakerVoice; 
+				backdrop = mCurNode.Backdrop;
+			}
+			o.SetFallbackBackdropStatic(backdrop);
+
+			let pl = players[consoleplayer];
+			if (pl && pl.mo && mCurNode)
+			{
+				let npc = pl.ConversationNPC;
+				if (npc)
+				{
+					double vol = 1.0;
+					let cvVol = CVar.GetCVar('jm_voice_volume', players[consoleplayer]);
+					if (cvVol) vol = clamp(cvVol.GetFloat(), 0.0, 1.0);
+
+					DialogUIOverlay.ScheduleSyncStartStatic(npc, voice, vol, CHAN_5);
+				}
+				else
+				{
+					o.ShowVoiceStatic(voice);
+				}
+			}
+			else
+			{
+				o.ShowVoiceStatic(voice);
+			}
+
+			_prev = mCurNode;
+		}
+
+		if (mCurNode == null)
+		{
+			o.EndConversationStatic();
+		}
+	}
+
+	override bool DrawBackdrop() { return true; }
+
+	StrifeDialogueReply GetReplyByIndex(int replynum)
+	{
+		int idx = 0;
+
+		for (let reply = mCurNode.Children; reply != null; reply = reply.Next)
+		{
+			if (reply.ShouldSkipReply(mPlayer))
+				continue;
+
+			if (idx == replynum)
+				return reply;
+
+			idx++;
+		}
+
+		return null;
+	}
+
+	String ExtractTradeKey(String txt)
+	{
+		int tagPos = txt.IndexOf("[trade ");
+		if (tagPos < 0)
+			return "";
+
+		int start = tagPos + 7; // после "[trade "
+		int end = txt.IndexOf("]", start);
+		if (end < 0)
+			return "";
+
+		return TradeTextUtil.TrimString(txt.Mid(start, end - start));
+	}
+
+	bool IsTradeReply(StrifeDialogueReply reply)
+	{
+		if (reply == null)
+			return false;
+
+		String txt = StringTable.Localize(reply.Reply);
+		return txt.IndexOf("[trade") >= 0;
+	}
+
+		
+	String StripTradeTag(String txt)
+	{
+		int start = txt.IndexOf("[trade");
+		if (start < 0)
+			return txt;
+
+		int end = txt.IndexOf("]", start);
+		if (end < 0)
+			return txt;
+
+		String left = TradeTextUtil.TrimString(txt.Left(start));
+		String right = TradeTextUtil.TrimString(txt.Mid(end + 1));
+
+		if (left != "" && right != "")
+			return left .. " " .. right;
+		else if (left != "")
+			return left;
+		else
+			return right;
+	}
+	
+	override bool MenuEvent(int mkey, bool fromcontroller)
+	{
+		if (mkey == MKEY_Enter)
+		{
+			if (mSelection >= 0 && mSelection < mResponses.Size() - 1)
+			{
+				int replynum = GetReplyNum();
+				let reply = GetReplyByIndex(replynum);
+
+				if (IsTradeReply(reply))
+				{
+					String txt = StringTable.Localize(reply.Reply);
+					String traderKey = ExtractTradeKey(txt);
+
+					if (traderKey != "")
+					{
+						int traderId = TradeDrawUtil.TraderKeyToNetId(traderKey);
+						Console.Printf("trade key=%s id=%d", traderKey, traderId);
+
+						EventHandler.SendNetworkEvent("open_tradeui_id", traderId);
+
+						// потом закрываем меню
+						Close();
+						return true;
+					}
+				}
+			}
+		}
+
+		return Super.MenuEvent(mkey, fromcontroller);
+	}
+
+	override int FormatReplies(int activereply)
+	{
+		mSelection = -1;
+
+		StrifeDialogueReply reply;
+		int r = -1;
+		int i = 1, j;
+		for (reply = mCurNode.Children; reply != NULL; reply = reply.Next)
+		{
+			r++;
+			if (reply.ShouldSkipReply(mPlayer))
+			{
+				continue;
+			}
+			if (activereply == r) mSelection = i - 1;
+
+			mShowGold |= reply.NeedsGold;
+
+			let ReplyText = StringTable.Localize(reply.Reply);
+			ReplyText = StripTradeTag(ReplyText); // <-- вот это добавили
+
+			if (reply.NeedsGold)
+			{
+				ReplyText.AppendFormat(" %s", StringTable.Localize("$TXT_TRADE"));
+				let amount = String.Format("%u", reply.PrintAmount);
+				ReplyText.Replace("%u", amount);
+			}
+
+			let ReplyLines = displayFont.BreakLines(ReplyText, ReplyWidth);
+
+			mResponses.Push(mResponseLines.Size());
+			for (j = 0; j < ReplyLines.Count(); ++j)
+			{
+				mResponseLines.Push(ReplyLines.StringAt(j));
+			}
+
+			++i;
+			ReplyLines.Destroy();
+		}
+
+		if (mSelection == -1)
+		{
+			mSelection = r < activereply ? r + 1 : 0;
+		}
+
+		let goodbyestr = mCurNode.Goodbye;
+		if (goodbyestr.Length() == 0)
+		{
+			goodbyestr = String.Format("$TXT_RANDOMGOODBYE_%d", CRandom[RandomSpeech](1, NUM_RANDOM_GOODBYES));
+		}
+		else if (goodbyestr.Left(7) == "RANDOM_")
+		{
+			goodbyestr = String.Format("$TXT_%s_%02d", goodbyestr, CRandom[RandomSpeech](1, NUM_RANDOM_LINES));
+		}
+		goodbyestr = StringTable.Localize(goodbyestr);
+		if (goodbyestr.Length() == 0 || goodbyestr.Left(1) == "$") goodbyestr = "Bye.";
+
+		mResponses.Push(mResponseLines.Size());
+		mResponseLines.Push(goodbyestr);
+
+		mYpos = MIN(140, 192 - mResponseLines.Size() * ReplyLineHeight);
+		i = 44 + mResponseLines.Size() * ReplyLineHeight;
+		if (mYpos - 100 < i - screen.GetHeight() / CleanYfac / 2)
+		{
+			mYpos = i - screen.GetHeight() / CleanYfac / 2 + 100;
+		}
+
+		if (mSelection >= mResponses.Size())
+		{
+			mSelection = mResponses.Size() - 1;
+		}
+		return mYpos;
+	}
+}
+
+
+// ============================================================
+//  Helper & functions (trim, splitlines...)
+// ============================================================
+class TradeTextUtil : Object
+{
+	static bool IsSpaceChar(int c)
+	{
+		return c == 32 || c == 9 || c == 10 || c == 13;
+	}
+
+	static String TrimString(String s)
+	{
+		int start = 0;
+		int l = s.Length();
+		int last = l - 1;
+
+		while (start < l && TradeTextUtil.IsSpaceChar(s.CharCodeAt(start)))
+			start++;
+
+		while (last >= start && TradeTextUtil.IsSpaceChar(s.CharCodeAt(last)))
+			last--;
+
+		if (last < start)
+			return "";
+
+		return s.Mid(start, last - start + 1);
+	}
+
+
+	static void SplitLines(String text, out Array<String> lines)
+	{
+		lines.Clear();
+		text.Split(lines, "\n");
+	}
+
+	static TradeUIItemEntry MakeTradeEntry(Name cls, int count, int price, TextureID icon)
+	{
+		TradeUIItemEntry entry = TradeUIItemEntry(new("TradeUIItemEntry"));
+		entry.cls = cls;
+		entry.count = count;
+		entry.price = price;
+		entry.icon = icon;
+
+		if (!entry.icon.isValid())
+			entry.icon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
+
+		return entry;
+	}
+	
+	static TraderStockItem MakeTraderStockItem(Name cls, int count)
+	{
+		TraderStockItem item = TraderStockItem(new("TraderStockItem"));
+		item.cls = cls;
+		item.count = count;
+		return item;
+	}
+	
+	
+	static int TraderKeyToNetId(String key)
+	{
+		int h = 5381;
+
+		for (int i = 0; i < key.Length(); i++)
+		{
+			int c = key.ByteAt(i);
+
+			if (c >= 65 && c <= 90)
+				c += 32;
+
+			h = ((h << 5) + h) + c;
+		}
+
+		if (h < 0)
+			h = -h;
+
+		return h;
+	}
+}
+
+// ============================================================
+//  Global drawing helpers
+// ============================================================
+class TradeDrawUtil : Object
+{
+	static ui void DrawTextureFitted(TextureID tex, double dx, double dy, int boxW, int boxH, double alpha)
+	{
+		if (!tex.isValid())
+			return;
+
+		Vector2 sz = TexMan.GetScaledSize(tex);
+		if (sz.x <= 0 || sz.y <= 0)
+			return;
+
+		double scaleX = boxW / sz.x;
+		double scaleY = boxH / sz.y;
+		double scale = scaleX;
+
+		if (scaleY < scale)
+			scale = scaleY;
+
+		int drawW = int(sz.x * scale + 0.5);
+		int drawH = int(sz.y * scale + 0.5);
+
+		int drawX = int(dx + (boxW - drawW) * 0.5 + 0.5);
+		int drawY = int(dy + (boxH - drawH) * 0.5 + 0.5);
+
+		Screen.DrawTexture(tex, false, drawX, drawY,
+			DTA_DestWidth, drawW,
+			DTA_DestHeight, drawH,
+			DTA_Alpha, alpha,
+			DTA_TopLeft, true
+		);
+	}
+	
+	
+	static ui int TraderKeyToNetId(String key)
+	{
+		int h = 5381;
+
+		for (int i = 0; i < key.Length(); i++)
+		{
+			int c = key.ByteAt(i);
+
+			if (c >= 65 && c <= 90)
+				c += 32;
+
+			h = ((h << 5) + h) + c;
+		}
+
+		if (h < 0)
+			h = -h;
+
+		return h;
+	}
+}
+
+// ============================================================
+//  Classes for traders
+// ============================================================
+
+class TraderStockDef : Object
+{
+	String traderKey;
+	Array<TraderStockItem> items;
+}
+
+class TraderRegistry : StaticEventHandler
+{
+	Array<TraderStockDef> defs;
+	bool loaded;
+
+	override void OnRegister()
+	{
+		if (!loaded)
+		{
+			LoadFromLump();
+			loaded = true;
+		}
+	}
+
+	clearscope static TraderRegistry Get()
+	{
+		return TraderRegistry(StaticEventHandler.Find('TraderRegistry'));
+	}
+
+	void Clear()
+	{
+		defs.Clear();
+	}
+
+	String FindKeyByNetId(int id)
+	{
+		for (int i = 0; i < defs.Size(); i++)
+		{
+			if (TradeTextUtil.TraderKeyToNetId(defs[i].traderKey) == id)
+				return defs[i].traderKey;
+		}
+		return "";
+	}
+
+	bool ParseTraderItemLine(String line, out Name outCls, out int outCount)
+	{
+		line = TradeTextUtil.TrimString(line);
+		if (line == "")
+			return false;
+
+		int commaPos = line.IndexOf(",");
+		if (commaPos == -1)
+			return false;
+
+		String clsStr = TradeTextUtil.TrimString(line.Left(commaPos));
+		String countStr = TradeTextUtil.TrimString(line.Mid(commaPos + 1));
+
+		if (clsStr == "" || countStr == "")
+			return false;
+
+		outCls = clsStr;
+		outCount = countStr.ToInt();
+
+		return outCount > 0;
+	}
+
+	TraderStockDef CloneTraderStockDef(TraderStockDef src)
+	{
+		if (src == null)
+			return null;
+
+		TraderStockDef dst = TraderStockDef(new("TraderStockDef"));
+		dst.traderKey = src.traderKey;
+
+		for (int i = 0; i < src.items.Size(); i++)
+		{
+			let item = src.items[i];
+			if (item == null)
+				continue;
+
+			TraderStockItem cloned = TradeTextUtil.MakeTraderStockItem(item.cls, item.count);
+			dst.items.Push(cloned);
+		}
+
+		return dst;
+	}
+
+	void LoadDefaults()
+	{
+		AddTraderItem("Vance", 'policepistol', 1);
+		AddTraderItem("Vance", 'ninemilammo', 20);
+		AddTraderItem("Vance", 'shotgunammo', 10);
+
+		AddTraderItem("Jimmy", 'chips', 50);
+		AddTraderItem("Jimmy", 'bowammo', 8);
+	}
+
+	void LoadFromLump()
+	{
+		Clear();
+
+		int lump = Wads.FindLump("TRADERS");
+		if (lump == -1)
+		{
+			Console.Printf("TRADERS lump not found, using defaults");
+			LoadDefaults();
+			return;
+		}
+
+		String data = Wads.ReadLump(lump);
+		if (data == "")
+		{
+			Console.Printf("TRADERS lump is empty, using defaults");
+			LoadDefaults();
+			return;
+		}
+
+		Array<String> lines;
+		TradeTextUtil.SplitLines(data, lines);
+
+		String currentTrader = "";
+		bool insideBlock = false;
+
+		for (int i = 0; i < lines.Size(); i++)
+		{
+			String line = TradeTextUtil.TrimString(lines[i]);
+
+			if (line == "")
+				continue;
+
+			if (line.Left(2) == "//")
+				continue;
+
+			if (!insideBlock && line.Left(7) == "trader ")
+			{
+				currentTrader = TradeTextUtil.TrimString(line.Mid(7));
+				if (currentTrader != "")
+					AddTrader(currentTrader);
+				continue;
+			}
+
+			if (line == "{")
+			{
+				if (currentTrader != "")
+					insideBlock = true;
+				continue;
+			}
+
+			if (line == "}")
+			{
+				insideBlock = false;
+				currentTrader = "";
+				continue;
+			}
+
+			if (insideBlock && currentTrader != "")
+			{
+				Name cls = '';
+				int count = 0;
+
+				if (ParseTraderItemLine(line, cls, count))
+					AddTraderItem(currentTrader, cls, count);
+			}
+		}
+
+		Console.Printf("TRADERS loaded: defs=%d", defs.Size());
+	}
+
+	TraderStockDef FindDef(String key)
+	{
+		for (int i = 0; i < defs.Size(); i++)
+		{
+			if (defs[i].traderKey == key)
+				return defs[i];
+		}
+		return null;
+	}
+
+	void AddTrader(String key)
+	{
+		if (FindDef(key) != null)
+			return;
+
+		TraderStockDef def = TraderStockDef(new("TraderStockDef"));
+		def.traderKey = key;
+		defs.Push(def);
+	}
+
+	void AddTraderItem(String key, Name cls, int count)
+	{
+		if (count <= 0)
+			return;
+
+		let trader = FindDef(key);
+		if (trader == null)
+		{
+			AddTrader(key);
+			trader = FindDef(key);
+			if (trader == null)
+				return;
+		}
+
+		for (int i = 0; i < trader.items.Size(); i++)
+		{
+			if (trader.items[i].cls == cls)
+			{
+				trader.items[i].count += count;
+				return;
+			}
+		}
+
+		TraderStockItem entry = TradeTextUtil.MakeTraderStockItem(cls, count);
+		trader.items.Push(entry);
+	}
+}
+
+class TraderStateHandler : EventHandler
+{
+	Array<TraderStockDef> liveDefs;
+	bool initialized;
+
+	override void OnRegister()
+	{
+		EnsureInitialized();
+	}
+
+	clearscope static TraderStateHandler Get()
+	{
+		return TraderStateHandler(EventHandler.Find('TraderStateHandler'));
+	}
+
+	void Clear()
+	{
+		liveDefs.Clear();
+		initialized = false;
+	}
+
+	void EnsureInitialized()
+	{
+		if (initialized && liveDefs.Size() > 0)
+			return;
+
+		InitializeFromRegistry();
+
+		if (liveDefs.Size() > 0)
+			initialized = true;
+	}
+
+	void InitializeFromRegistry()
+	{
+		liveDefs.Clear();
+
+		let reg = TraderRegistry.Get();
+		if (reg == null)
+		{
+			Console.Printf("TraderStateHandler: TraderRegistry not found");
+			return;
+		}
+
+		if (reg.defs.Size() == 0)
+		{
+			Console.Printf("TraderStateHandler: TraderRegistry has 0 defs");
+			return;
+		}
+
+		for (int i = 0; i < reg.defs.Size(); i++)
+		{
+			let cloned = reg.CloneTraderStockDef(reg.defs[i]);
+			if (cloned != null)
+				liveDefs.Push(cloned);
+		}
+
+		Console.Printf("TraderStateHandler initialized: liveDefs=%d", liveDefs.Size());
+	}
+
+	void ResetToDefaults()
+	{
+		initialized = false;
+		EnsureInitialized();
+	}
+
+	TraderStockDef FindDef(String key)
+	{
+		EnsureInitialized();
+
+		for (int i = 0; i < liveDefs.Size(); i++)
+		{
+			if (liveDefs[i].traderKey == key)
+				return liveDefs[i];
+		}
+		return null;
+	}
+
+	void BuildTraderStock(String key, out Array<TradeUIItemEntry> outItems, TradeUIOverlay owner)
+	{
+		outItems.Clear();
+		EnsureInitialized();
+
+		Console.Printf("BuildTraderStock key=%s liveDefs=%d", key, liveDefs.Size());
+
+		let trader = FindDef(key);
+		if (trader == null || owner == null)
+		{
+			Console.Printf("BuildTraderStock: trader not found for key=%s", key);
+			return;
+		}
+
+		for (int i = 0; i < trader.items.Size(); i++)
+		{
+			let src = trader.items[i];
+			if (src == null)
+				continue;
+
+			let itemDef = owner.FindTradeItemDef(src.cls);
+			if (itemDef == null)
+			{
+				Console.Printf("BuildTraderStock: item %s not in TRADEITEMS", src.cls);
+				continue;
+			}
+
+			TradeUIItemEntry entry = TradeTextUtil.MakeTradeEntry(
+				src.cls,
+				src.count,
+				itemDef.price,
+				itemDef.icon
+			);
+			outItems.Push(entry);
+		}
+
+		Console.Printf("BuildTraderStock result items=%d", outItems.Size());
+	}
+
+	void SetLiveTraderStock(String key, Array<TradeUIItemEntry> newStock)
+	{
+		EnsureInitialized();
+
+		let trader = FindDef(key);
+		if (trader == null)
+		{
+			Console.Printf("SetLiveTraderStock: trader not found for key=%s", key);
+			return;
+		}
+
+		trader.items.Clear();
+
+		for (int i = 0; i < newStock.Size(); i++)
+		{
+			let item = newStock[i];
+			if (item == null)
+				continue;
+
+			TraderStockItem stockItem = TradeTextUtil.MakeTraderStockItem(item.cls, item.count);
+			trader.items.Push(stockItem);
+		}
+
+		Console.Printf("SetLiveTraderStock key=%s items=%d", key, trader.items.Size());
+	}
+
+	String FindKeyByNetId(int id)
+	{
+		EnsureInitialized();
+
+		for (int i = 0; i < liveDefs.Size(); i++)
+		{
+			if (TradeTextUtil.TraderKeyToNetId(liveDefs[i].traderKey) == id)
+				return liveDefs[i].traderKey;
+		}
+		return "";
+	}
+}
+
+// ============================================================
+//  UI Button
+// ============================================================
+
+class TradeUIButton : Object
+{
+	int x;
+	int y;
+	int w;
+	int h;
+
+	TextureID icon;
+	Name actionEvent;
+	Name clickSound;
+
+	bool visible;
+	bool enabled;
+
+	void Init(int px, int py, int pw, int ph)
+	{
+		x = px;
+		y = py;
+		w = pw;
+		h = ph;
+
+		visible = true;
+		enabled = true;
+
+		icon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
+		actionEvent = '';
+		clickSound = '';
+	}
+
+	void SetPos(int px, int py)
+	{
+		x = px;
+		y = py;
+	}
+
+	void SetSize(int pw, int ph)
+	{
+		w = pw;
+		h = ph;
+	}
+
+	void SetVisible(bool on)
+	{
+		visible = on;
+	}
+
+	void SetEnabled(bool on)
+	{
+		enabled = on;
+	}
+
+	void SetIcon(TextureID tex)
+	{
+		if (tex.isValid())
+			icon = tex;
+	}
+
+	void SetDefaultIcon(String texName)
+	{
+		TextureID tex = TexMan.CheckForTexture(texName, TexMan.TYPE_Any);
+		if (tex.isValid())
+			icon = tex;
+	}
+
+	void SetAction(Name evt)
+	{
+		actionEvent = evt;
+	}
+
+	void SetClickSound(Name snd)
+	{
+		clickSound = snd;
+	}
+
+	bool IsInside(int mx, int my)
+	{
+		if (!visible || !enabled)
+			return false;
+
+		return mx >= x && mx <= x + w &&
+			   my >= y && my <= y + h;
+	}
+
+	ui void Draw(bool hovered, bool pressed)
+	{
+		if (!visible)
+			return;
+
+		TextureID whiteTex = TexMan.CheckForTexture("wpx", TexMan.TYPE_Any);
+
+		double bgAlpha = 0.10;
+		double iconAlpha = enabled ? 1.0 : 0.35;
+
+		if (hovered)
+			bgAlpha = 0.20;
+
+		if (pressed)
+			bgAlpha = 0.30;
+
+		if (whiteTex.isValid())
+		{
+			Screen.DrawTexture(whiteTex, false, x, y,
+				DTA_DestWidth, w,
+				DTA_DestHeight, h,
+				DTA_Alpha, bgAlpha,
+				DTA_TopLeft, true
+			);
+		}
+
+		if (icon.isValid())
+			TradeDrawUtil.DrawTextureFitted(icon, x, y, w, h, iconAlpha);
+	}
+
+	bool Activate(TradeUIOverlay owner)
+	{
+		if (!visible || !enabled)
+			return false;
+
+		if (actionEvent != '')
+		{
+			owner.SendNetworkEvent(actionEvent);
+			return true;
+		}
+
+		return false;
+	}
+}
+
+// ============================================================
+//  Trade item def (describes an item. Like metadata)
+// ============================================================
+
+class TradeItemDef : Object
+{
+	Name cls;
+	String displayName;
+	String description;
+	int price;
+	TextureID icon;
+}
+
+// ============================================================
+//  Trade stock item. Cls + count. For trader inventory.
+// ============================================================
+
+class TraderStockItem : Object
+{
+	Name cls;
+	int count;
+}
+
+
+// ============================================================
+//  Trade item entry (UI layer - what to display)
+// ============================================================
+
+class TradeUIItemEntry : Object
+{
+	Name cls;
+	int count;
+	TextureID icon;
+	int price;
+}
+// ============================================================
+//  Universal item column
+// ============================================================
+class TradeItemColumn : Object
+{
+	int x;
+	int y;
+
+	int slotSize;
+	int columnWidth;
+	int slotStep;
+	int maxVisible;
+	int scroll;
+
+	bool highlighted;
+	bool showTotalPrice;
+	bool debugAlwaysDrawBackground;
+
+	Array<TradeUIItemEntry> entries;
+
+	void Init(int px, int py, int pslotSize, int pcolumnWidth, int pslotStep, int pmaxVisible)
+	{
+		x = px;
+		y = py;
+		slotSize = pslotSize;
+		columnWidth = pcolumnWidth;
+		slotStep = pslotStep;
+		maxVisible = pmaxVisible;
+		scroll = 0;
+		highlighted = false;
+		showTotalPrice = false;
+		debugAlwaysDrawBackground = false;
+	}
+
+	int FindEntryIndexByClass(Name cls)
+	{
+		for (int i = 0; i < entries.Size(); i++)
+		{
+			if (entries[i].cls == cls)
+				return i;
+		}
+		return -1;
+	}
+
+	bool RemoveAmount(Name cls, int amount)
+	{
+		if (amount <= 0)
+			return false;
+
+		int idx = FindEntryIndexByClass(cls);
+		if (idx == -1)
+			return false;
+
+		if (entries[idx].count > amount)
+		{
+			entries[idx].count -= amount;
+			return true;
+		}
+
+		entries.Delete(idx);
+		return true;
+	}
+
+	void Clear()
+	{
+		entries.Clear();
+		scroll = 0;
+	}
+
+	void SetEntries(Array<TradeUIItemEntry> newEntries)
+	{
+		entries.Clear();
+
+		for (int i = 0; i < newEntries.Size(); i++)
+		{
+			entries.Push(newEntries[i]);
+		}
+
+		int maxScroll = entries.Size() - maxVisible;
+		if (maxScroll < 0)
+			maxScroll = 0;
+
+		if (scroll > maxScroll)
+			scroll = maxScroll;
+	}
+
+	void SetHighlighted(bool on)
+	{
+		highlighted = on;
+	}
+
+	void SetShowTotalPrice(bool on)
+	{
+		showTotalPrice = on;
+	}
+
+	void ScrollUp()
+	{
+		if (scroll > 0)
+			scroll--;
+	}
+
+	void ScrollDown()
+	{
+		int maxScroll = entries.Size() - maxVisible;
+		if (maxScroll < 0)
+			maxScroll = 0;
+
+		if (scroll < maxScroll)
+			scroll++;
+	}
+
+	int GetHoveredIndex(int mx, int my)
+	{
+		int drawn = 0;
+
+		for (int i = scroll; i < entries.Size(); i++)
+		{
+			if (drawn >= maxVisible)
+				break;
+
+			double rowX = x;
+			double rowY = y + drawn * slotStep;
+
+			if (mx >= rowX && mx <= rowX + columnWidth &&
+				my >= rowY && my <= rowY + slotSize)
+			{
+				return i;
+			}
+
+			drawn++;
+		}
+
+		return -1;
+	}
+
+	void AddItem(TradeUIItemEntry item)
+	{
+		if (item == null)
+			return;
+
+		for (int i = 0; i < entries.Size(); i++)
+		{
+			if (entries[i].cls == item.cls)
+			{
+				entries[i].count += item.count;
+				return;
+			}
+		}
+
+		TradeUIItemEntry copy = TradeTextUtil.MakeTradeEntry(
+			item.cls,
+			item.count,
+			item.price,
+			item.icon
+		);
+
+		entries.Push(copy);
+	}
+
+	void RemoveItemByClass(Name cls)
+	{
+		for (int i = 0; i < entries.Size(); i++)
+		{
+			if (entries[i].cls == cls)
+			{
+				entries.Delete(i);
+				return;
+			}
+		}
+	}
+
+	bool IsInside(int mx, int my)
+	{
+		double listHeight = (maxVisible - 1) * slotStep + slotSize;
+
+		return mx >= x && mx <= x + columnWidth &&
+			   my >= y && my <= y + listHeight;
+	}
+
+	bool HasItem(Name cls)
+	{
+		for (int i = 0; i < entries.Size(); i++)
+		{
+			if (entries[i].cls == cls)
+				return true;
+		}
+		return false;
+	}
+
+	int GetTotalPrice()
+	{
+		int total = 0;
+
+		for (int i = 0; i < entries.Size(); i++)
+		{
+			total += entries[i].count * entries[i].price;
+		}
+
+		return total;
+	}
+
+	TradeUIItemEntry GetEntry(int index)
+	{
+		if (index < 0 || index >= entries.Size())
+			return null;
+
+		return entries[index];
+	}
+
+	ui void DrawBackgroundHighlight()
+	{
+		if (!highlighted && !debugAlwaysDrawBackground)
+			return;
+
+		TextureID whiteTex = TexMan.CheckForTexture("wpx", TexMan.TYPE_Any);
+		if (!whiteTex.isValid())
+			return;
+
+		int listHeight = (maxVisible - 1) * slotStep + slotSize;
+
+		double alpha = 0.20;
+		if (debugAlwaysDrawBackground)
+			alpha = 0.10;
+
+		if (highlighted)
+			alpha = 0.25;
+
+		Screen.DrawTexture(whiteTex, false, x, y,
+			DTA_DestWidth, columnWidth,
+			DTA_DestHeight, listHeight,
+			DTA_Alpha, alpha,
+			DTA_TopLeft, true
+		);
+	}
+
+	ui void Draw(int hoveredIndex, int selectedIndex)
+	{
+		TextureID fallback = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
+
+		DrawBackgroundHighlight();
+
+		int drawn = 0;
+
+		for (int i = scroll; i < entries.Size(); i++)
+		{
+			if (drawn >= maxVisible)
+				break;
+
+			TextureID icon = entries[i].icon;
+			if (!icon.isValid())
+				icon = fallback;
+
+			double rowY = y + drawn * slotStep;
+			double iconX = x + (columnWidth - slotSize) * 0.5;
+			double iconY = rowY;
+
+			double alpha = 1.0;
+			if (i == selectedIndex)
+				alpha = 0.35;
+
+// 			TextureID whiteTex = TexMan.CheckForTexture("wpx", TexMan.TYPE_Any);
+// 			if (whiteTex.isValid())
+// 			{
+// 				Screen.DrawTexture(whiteTex, false, iconX, iconY,
+// 					DTA_DestWidth, slotSize,
+// 					DTA_DestHeight, slotSize,
+// 					DTA_Alpha, 0.15,
+// 					DTA_TopLeft, true
+// 				);
+// 			}
+
+			if (icon.isValid())
+				TradeDrawUtil.DrawTextureFitted(icon, iconX, iconY, slotSize, slotSize, alpha);
+
+			if (entries[i].count > 1)
+			{
+				String txt = "x " .. entries[i].count;
+
+				Screen.DrawText(
+					SmallFont,
+					Font.CR_WHITE,
+					iconX + slotSize + 4,
+					iconY + slotSize / 2,
+					txt,
+					DTA_Alpha, alpha,
+					DTA_ScaleX, 2,
+					DTA_ScaleY, 2
+				);
+			}
+
+			drawn++;
+		}
+
+		if (showTotalPrice)
+		{
+			String totalTxt = "Total: " .. GetTotalPrice();
+			double listHeight = (maxVisible - 1) * slotStep + slotSize;
+
+			Screen.DrawText(
+				SmallFont,
+				Font.CR_WHITE,
+				x,
+				y + listHeight + 6,
+				totalTxt,
+				DTA_ScaleX, 2,
+				DTA_ScaleY, 2
+			);
+		}
+	}
+}
+
+// ============================================================
+//  Cursor
+// ============================================================
+
+class TradeCursor : Object
+{
+	int x;
+	int y;
+
+	TextureID icon;
+	bool visible;
+
+	int screenW;
+	int screenH;
+
+	void Init(int sw, int sh)
+	{
+		screenW = sw;
+		screenH = sh;
+		x = sw / 2;
+		y = sh / 2;
+		visible = false;
+		icon = TexMan.CheckForTexture("CURSORA0", TexMan.TYPE_Any);
+	}
+
+	void SetScreenSize(int sw, int sh)
+	{
+		screenW = sw;
+		screenH = sh;
+
+		if (x < 0) x = 0;
+		if (y < 0) y = 0;
+		if (x >= screenW) x = screenW - 1;
+		if (y >= screenH) y = screenH - 1;
+	}
+
+	void SetVisible(bool on)
+	{
+		visible = on;
+	}
+
+	void SetIcon(TextureID tex)
+	{
+		if (tex.isValid())
+			icon = tex;
+	}
+
+	void ClearIcon()
+	{
+		icon = TexMan.CheckForTexture("CURSORA0", TexMan.TYPE_Any);
+	}
+
+	void SetPos(int nx, int ny)
+	{
+		x = nx;
+		y = ny;
+
+		if (x < 0) x = 0;
+		if (y < 0) y = 0;
+		if (x >= screenW) x = screenW - 1;
+		if (y >= screenH) y = screenH - 1;
+	}
+
+	ui void Draw()
+	{
+		if (!visible || !icon.isValid())
+			return;
+
+		Vector2 sz = TexMan.GetScaledSize(icon);
+		if (sz.x <= 0 || sz.y <= 0)
+			return;
+
+		int scale = 4;
+		int drawW = sz.x * scale;
+		int drawH = sz.y * scale;
+
+		int halfW = drawW / 2;
+		int halfH = drawH / 2;
+
+		Screen.DrawTexture(icon, false, x - halfW, y - halfH,
+			DTA_DestWidth, drawW,
+			DTA_DestHeight, drawH,
+			DTA_TopLeft, true
+		);
+	}
+}
+// ============================================================
+//  dialog window to deal with quantities
+// ============================================================
+
+class TradeQuantityDialog : Object
+{
+	bool visible;
+	double drawScale;
+	
+	int x;
+	int y;
+	int w;
+	int h;
+
+	int quantity;
+	int maxQuantity;
+
+	Name itemClass;
+	int itemPrice;
+	TextureID itemIcon;
+
+	TradeUIButton plusButton;
+	TradeUIButton minusButton;
+	TradeUIButton okButton;
+	TradeUIButton cancelButton;
+	TradeUIButton allButton;
+
+	void Init(double uiScale)
+	{
+		visible = false;
+		drawScale = uiScale;
+		w = int(90 * drawScale);
+		h = int(70 * drawScale);
+
+		plusButton = new("TradeUIButton");
+		minusButton = new("TradeUIButton");
+		okButton = new("TradeUIButton");
+		cancelButton = new("TradeUIButton");
+		allButton = new("TradeUIButton");
+
+		plusButton.Init(0, 0, int(16 * drawScale), int(10 * drawScale));
+		minusButton.Init(0, 0, int(16 * drawScale), int(10 * drawScale));
+		okButton.Init(0, 0, int(32 * drawScale), int(15 * drawScale));
+		cancelButton.Init(0, 0, int(22 * drawScale), int(10 * uiScale));
+		allButton.Init(0, 0, int(34 * drawScale), int(10 * drawScale));
+
+		plusButton.SetDefaultIcon("arrowup");
+		minusButton.SetDefaultIcon("arrowdn");
+		okButton.SetDefaultIcon("okbutton");
+		cancelButton.SetDefaultIcon("tradeoff");
+		allButton.SetDefaultIcon("allbtn");
+
+		plusButton.SetAction('qty_plus');
+		minusButton.SetAction('qty_minus');
+		okButton.SetAction('qty_ok');
+		cancelButton.SetAction('qty_cancel');
+		allButton.SetAction('qty_all');
+	}
+
+	void Open(TradeUIItemEntry entry, int maxCount, int screenW, int screenH)
+	{
+		if (entry == null)
+			return;
+
+		itemClass = entry.cls;
+		itemPrice = entry.price;
+		itemIcon = entry.icon;
+		maxQuantity = maxCount;
+		quantity = 1;
+
+		Layout(screenW, screenH);
+		visible = true;
+	}
+
+	void Close()
+	{
+		visible = false;
+		quantity = 1;
+		maxQuantity = 0;
+		itemClass = '';
+		itemPrice = 0;
+		itemIcon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
+	}
+
+	bool IsInside(int mx, int my)
+	{
+		return visible &&
+			   mx >= x && mx <= x + w &&
+			   my >= y && my <= y + h;
+	}
+
+	void AddOne()
+	{
+		if (quantity < maxQuantity)
+			quantity++;
+	}
+
+	void RemoveOne()
+	{
+		if (quantity > 1)
+			quantity--;
+	}
+
+	void SetAll()
+	{
+		quantity = maxQuantity;
+	}
+
+	ui void DrawButton(TradeUIButton btn, int mx, int my, bool held)
+	{
+		if (btn == null)
+			return;
+
+		bool hov = btn.IsInside(mx, my);
+		btn.Draw(hov, hov && held);
+	}
+
+
+	void Layout(int screenW, int screenH)
+	{
+		x = (screenW - w) / 2;
+		y = (screenH - h) / 2;
+
+		int pad = int(8 * drawScale);
+		int topPad = int(8 * drawScale);
+		int iconBox = int(24 * drawScale);
+
+		plusButton.SetPos(x + iconBox * 2.3 + 2 + plusButton.w, y + plusButton.h + 6);
+		minusButton.SetPos(x + iconBox * 2.3,  y + plusButton.h + 6);
+		allButton.SetPos(x + iconBox * 2.3, y + plusButton.h * 2 + 8);
+
+		okButton.SetPos(x + pad, y + plusButton.h * 4.2 + 30);
+		cancelButton.SetPos(x + iconBox * 1.9 + plusButton.w, y + plusButton.h * 4.2 + 30);
+	}
+
+	ui void Draw(int mx, int my, bool lmbHeld)
+	{
+		if (!visible)
+			return;
+
+		TextureID whiteTex = TexMan.CheckForTexture("wpx", TexMan.TYPE_Any);
+		TextureID bg = TexMan.CheckForTexture("BGPANEL", TexMan.TYPE_Any);
+
+		if (bg.isValid())
+		{
+			Screen.DrawTexture(bg, false, 0, 0,
+				DTA_DestWidth, Screen.GetWidth(),
+				DTA_DestHeight, Screen.GetHeight(),
+				DTA_Alpha, 0.5,
+				DTA_TopLeft, true
+			);
+		}
+		else if (whiteTex.isValid())
+		{
+			Screen.DrawTexture(whiteTex, false, 0, 0,
+				DTA_DestWidth, Screen.GetWidth(),
+				DTA_DestHeight, Screen.GetHeight(),
+				DTA_Alpha, 0.35,
+				DTA_TopLeft, true
+			);
+		}
+		if (whiteTex.isValid())
+		{
+			Screen.DrawTexture(bg, false, x, y,
+				DTA_DestWidth, w,
+				DTA_DestHeight, h,
+				DTA_Alpha, 1,
+				DTA_TopLeft, true
+			);
+		}
+
+		if (!itemIcon.isValid())
+			itemIcon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
+
+		int iconBox = int(24 * drawScale);
+		int iconX = x + (w - iconBox * 1.8) / 3;
+		int iconY = y + int(6 * drawScale);
+
+		TradeDrawUtil.DrawTextureFitted(itemIcon, iconX, iconY, iconBox, iconBox, 1.0);
+
+		String qtyText = "x " .. quantity .. " / " .. maxQuantity;
+
+		double textScale = 2.5;
+		int charW = int(8 * textScale);
+		int textW = qtyText.Length() * charW;
+		int textX = x + (w - textW) / 3;
+		int textY = iconY + iconBox + int(4 * drawScale);
+
+		Screen.DrawText(
+			SmallFont,
+			Font.CR_WHITE,
+			textX,
+			textY,
+			qtyText,
+			DTA_ScaleX, textScale,
+			DTA_ScaleY, textScale
+		);
+		
+		DrawButton(minusButton, mx, my, lmbHeld);
+		DrawButton(plusButton, mx, my, lmbHeld);
+		DrawButton(allButton, mx, my, lmbHeld);
+		DrawButton(okButton, mx, my, lmbHeld);
+		DrawButton(cancelButton, mx, my, lmbHeld);
+	}
+}
+
+// ============================================================
+//  Main overlay
+// ============================================================
+class TradeUIOverlay : EventHandler
+{
+	const COL_INV = 0;
+	const COL_SELL = 1;
+	const COL_BUY = 2;
+	const COL_TRADER = 3;
+	const COL_NONE = -1;
+
+	bool visible;
+
+	TradeUIButton invUpButton;
+	TradeUIButton invDownButton;
+	TradeUIButton sellUpButton;
+	TradeUIButton sellDownButton;
+	TradeUIButton buyUpButton;
+	TradeUIButton buyDownButton;
+	TradeUIButton traderUpButton;
+	TradeUIButton traderDownButton;
+	TradeUIButton tradeButton;
+	TradeUIButton cancelButton;
+
+	String infoMessage;
+
+	bool lmbHeld;
+
+	int UI_VW;
+	int UI_VH;
+
+	int SCREEN_W;
+	int SCREEN_H;
+
+	int SLOT_SIZE;
+	int SLOT_STEP;
+	int MAX_VISIBLE;
+
+	int selectedItemIndex;
+	bool draggingItem;
+	Name selectedItemClass;
+
+	TradeCursor cursor;
+	
+	TradeItemColumn inventoryColumn;
+	TradeItemColumn sellColumn;
+	TradeItemColumn buyColumn;
+	TradeItemColumn traderColumn;
+
+	Array<TradeUIItemEntry> traderStock;
+	Array<TradeItemDef> tradeWhitelist;
+
+	Actor currentConversationNPC;
+	String currentTraderKey;
+	
+	int dragSourceColumn;
+
+	double UIScale;
+	int COLUMN_WIDTH;
+
+	TradeQuantityDialog qtyDialog;
+
+	int pendingSourceColumn;
+	int pendingTargetColumn;
+	Name pendingItemClass;
+
+	override void OnRegister()
+	{
+	
+		UIScale = 4;
+		UI_VW = 610;
+		UI_VH = 250;
+
+		SCREEN_W = Screen.GetWidth();
+		SCREEN_H = Screen.GetHeight();
+		COLUMN_WIDTH = int(40 * UIScale);
+
+		MAX_VISIBLE = 6;
+
+		SLOT_SIZE = int(24 * UIScale);
+		SLOT_STEP = SLOT_SIZE + int(2 * UIScale);
+
+		selectedItemIndex = -1;
+		draggingItem = false;
+		selectedItemClass = '';
+
+		IsUiProcessor = false;
+		RequireMouse = false;
+		
+		infoMessage = "";
+		
+		cursor = new("TradeCursor");
+		cursor.Init(SCREEN_W, SCREEN_H);
+
+		inventoryColumn = new("TradeItemColumn");
+		sellColumn = new("TradeItemColumn");
+		buyColumn = new("TradeItemColumn");
+		traderColumn = new("TradeItemColumn");
+
+		inventoryColumn.Init(0, 0, SLOT_SIZE, COLUMN_WIDTH, SLOT_STEP, MAX_VISIBLE);
+		sellColumn.Init(0, 0, SLOT_SIZE, COLUMN_WIDTH, SLOT_STEP, MAX_VISIBLE);
+		buyColumn.Init(0, 0, SLOT_SIZE, COLUMN_WIDTH, SLOT_STEP, MAX_VISIBLE);
+		traderColumn.Init(0, 0, SLOT_SIZE, COLUMN_WIDTH, SLOT_STEP, MAX_VISIBLE);
+
+		inventoryColumn.SetShowTotalPrice(false);
+		sellColumn.SetShowTotalPrice(true);
+		buyColumn.SetShowTotalPrice(true);
+		traderColumn.SetShowTotalPrice(false);
+
+		dragSourceColumn = COL_NONE;
+
+		inventoryColumn.debugAlwaysDrawBackground = true;
+		sellColumn.debugAlwaysDrawBackground = true;
+		buyColumn.debugAlwaysDrawBackground = true;
+		traderColumn.debugAlwaysDrawBackground = true;
+
+		qtyDialog = new("TradeQuantityDialog");
+		qtyDialog.Init(UIScale);
+
+		pendingSourceColumn = COL_NONE;
+		pendingTargetColumn = COL_NONE;
+		pendingItemClass = '';
+
+		lmbHeld = false;
+		
+		LoadTradeWhitelistFromLump();
+
+		traderStock.Clear();
+
+		InitializeButtons();
+		UpdateScreenLayout();
+	}
+
+	/// for dealing with quantities
+
+	void ClearPendingTransfer()
+	{
+		pendingSourceColumn = COL_NONE;
+		pendingTargetColumn = COL_NONE;
+		pendingItemClass = '';
+	}
+
+	void OpenQuantityDialog(TradeUIItemEntry entry, int sourceCol, int targetCol)
+	{
+		if (entry == null)
+			return;
+
+		pendingSourceColumn = sourceCol;
+		pendingTargetColumn = targetCol;
+		pendingItemClass = entry.cls;
+
+		qtyDialog.Open(entry, entry.count, SCREEN_W, SCREEN_H);
+	}
+
+	void CancelQuantityDialog()
+	{
+		qtyDialog.Close();
+		ClearPendingTransfer();
+
+		selectedItemIndex = -1;
+		draggingItem = false;
+		dragSourceColumn = COL_NONE;
+		selectedItemClass = '';
+		cursor.ClearIcon();
+	}
+
+	void ExecuteTransferAmount(int amount)
+	{
+		if (amount <= 0)
+			return;
+
+		let p = players[consoleplayer];
+		if (!p || !p.mo)
+			return;
+
+		TradeItemDef def = FindTradeItemDef(pendingItemClass);
+		if (def == null)
+			return;
+
+		TradeUIItemEntry moved = TradeTextUtil.MakeTradeEntry(
+			pendingItemClass,
+			amount,
+			def.price,
+			def.icon
+		);
+
+		// INV -> SELL
+		if (pendingSourceColumn == COL_INV && pendingTargetColumn == COL_SELL)
+		{
+			sellColumn.AddItem(moved);
+			RebuildPlayerColumns(p.mo);
+		}
+		// SELL -> INV
+		else if (pendingSourceColumn == COL_SELL && pendingTargetColumn == COL_INV)
+		{
+			sellColumn.RemoveAmount(pendingItemClass, amount);
+			RebuildPlayerColumns(p.mo);
+		}
+		// TRADER -> BUY
+		else if (pendingSourceColumn == COL_TRADER && pendingTargetColumn == COL_BUY)
+		{
+			buyColumn.AddItem(moved);
+			RebuildTraderColumn();
+		}
+		// BUY -> TRADER
+		else if (pendingSourceColumn == COL_BUY && pendingTargetColumn == COL_TRADER)
+		{
+			buyColumn.RemoveAmount(pendingItemClass, amount);
+			RebuildTraderColumn();
+		}
+
+		qtyDialog.Close();
+		ClearPendingTransfer();
+
+		selectedItemIndex = -1;
+		draggingItem = false;
+		dragSourceColumn = COL_NONE;
+		selectedItemClass = '';
+		cursor.ClearIcon();
+	}
+		
+	bool ProcessQuantityDialogButtons()
+	{
+		if (!qtyDialog.visible)
+			return false;
+
+		if (ProcessButtonClick(qtyDialog.minusButton)) return true;
+		if (ProcessButtonClick(qtyDialog.plusButton)) return true;
+		if (ProcessButtonClick(qtyDialog.allButton)) return true;
+		if (ProcessButtonClick(qtyDialog.okButton)) return true;
+		if (ProcessButtonClick(qtyDialog.cancelButton)) return true;
+
+		return false;
+	}
+	
+	/////
+	
+	void AddTradeWhitelistItem(Name cls, String displayName, String description, int price, String iconName)
+	{
+		TradeItemDef def = TradeItemDef(new("TradeItemDef"));
+		def.cls = cls;
+		def.displayName = displayName;
+		def.description = description;
+		def.price = price;
+		def.icon = TexMan.CheckForTexture(iconName, TexMan.TYPE_Any);
+
+		if (!def.icon.isValid())
+			def.icon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
+
+		tradeWhitelist.Push(def);
+	}
+
+	TradeItemDef FindTradeItemDef(Name cls)
+	{
+		for (int i = 0; i < tradeWhitelist.Size(); i++)
+		{
+			if (tradeWhitelist[i].cls == cls)
+				return tradeWhitelist[i];
+		}
+		return null;
+	}
+	
+	////// whitelist is loaded from lump.
+	void LoadTradeWhitelistFromLump()
+	{
+		tradeWhitelist.Clear();
+
+		int lump = Wads.FindLump("TRADEITEMS");
+		if (lump == -1)
+		{
+			Console.Printf("TRADEITEMS lump not found, using defaults");
+			LoadTradeWhitelistDefaults();
+			return;
+		}
+
+		String data = Wads.ReadLump(lump);
+		if (data == "")
+		{
+			Console.Printf("TRADEITEMS lump is empty, using defaults");
+			LoadTradeWhitelistDefaults();
+			return;
+		}
+
+		Array<String> lines;
+		TradeTextUtil.SplitLines(data, lines);
+
+		for (int i = 0; i < lines.Size(); i++)
+		{
+			String line = TradeTextUtil.TrimString(lines[i]);
+			if (line == "")
+				continue;
+
+			// not parsing comments
+			if (line.Left(2) == "//")
+				continue;
+
+			Array<String> parts;
+			line.Split(parts, "|");
+
+			if (parts.Size() < 5)
+			{
+				Console.Printf("TRADEITEMS bad line %d: %s", i + 1, line);
+				continue;
+			}
+
+			Name cls = TradeTextUtil.TrimString(parts[0]);
+			String displayName = TradeTextUtil.TrimString(parts[1]);
+			String description = TradeTextUtil.TrimString(parts[2]);
+			int price = TradeTextUtil.TrimString(parts[3]).ToInt();
+			String iconName = TradeTextUtil.TrimString(parts[4]);
+
+			AddTradeWhitelistItem(cls, displayName, description, price, iconName);
+		}
+
+		Console.Printf("TRADEITEMS loaded: %d", tradeWhitelist.Size());
+
+		if (tradeWhitelist.Size() == 0)
+		{
+			Console.Printf("TRADEITEMS parsed 0 items, using defaults");
+			LoadTradeWhitelistDefaults();
+		}
+	}
+
+	void LoadTradeWhitelistDefaults()
+	// fallback funtion, in case lump is not loaded.
+	{
+		tradeWhitelist.Clear();
+
+		AddTradeWhitelistItem('policepistol', "Police Pistol", "Standard sidearm.", 120, "590GA0");
+		AddTradeWhitelistItem('ninemilammo', "9mm Ammo", "Ammo for 9mm weapons.", 2, "CLIPA0");
+		AddTradeWhitelistItem('shotgunammo', "Shotgun Ammo", "Shells for shotguns.", 4, "SBOXA0");
+		AddTradeWhitelistItem('bowammo', "Bow Ammo", "Arrows or bolts.", 6, "CELLA0");
+		AddTradeWhitelistItem('chips', "Chips", "Trade currency.", 1, "SEL1D0");
+		AddTradeWhitelistItem('leveraction', "Lever-action shotgun", "Your personal handgun.", 350, "GRIGA0");
+		AddTradeWhitelistItem('ThumperAmmo', "Thumper Ammo", "Those thumping thing for that thumper.", 10, "GRIGA0");
+
+	}
+
+	void OpenForTraderKey(String traderKey)
+	{
+		infoMessage = "";
+
+		sellColumn.Clear();
+		buyColumn.Clear();
+		traderStock.Clear();
+		
+		currentTraderKey = traderKey;
+
+		Console.Printf("OpenForTraderKey: %s", traderKey);
+				
+		let nstate = TraderStateHandler.Get();
+		if (nstate != null)
+		{
+			nstate.BuildTraderStock(traderKey, traderStock, self);
+		}
+		else
+		{
+			Console.Printf("OpenForTraderKey: TraderStateHandler is null");
+		}
+
+		Console.Printf("OpenForTraderKey: traderStock=%d", traderStock.Size());
+
+		let p = players[consoleplayer];
+		if (p && p.mo)
+		{
+			RebuildPlayerColumns(p.mo);
+		}
+
+		RebuildTraderColumn();
+		SetVisible(true);
+	}
+	
+	void CloseTrade()
+	{
+		SetVisible(false);
+		traderStock.Clear();
+		sellColumn.Clear();
+		buyColumn.Clear();
+		infoMessage = "";
+		currentTraderKey = "";
+	}
+	
+	void OpenForTraderActor(Actor npc)
+	{
+		if (npc == null)
+			return;
+
+		OpenForTraderKey(npc.GetClassName());
+	}
+	
+	
+	void InitializeButtons()
+	{
+		tradeButton = new("TradeUIButton");
+		tradeButton.Init(0, 0, int(20 * UIScale), int(10 * UIScale));
+		tradeButton.SetDefaultIcon("trade");
+		tradeButton.SetAction('do_trade');
+
+		cancelButton = new("TradeUIButton");
+		cancelButton.Init(0, 0, int(20 * UIScale), int(10 * UIScale));
+		cancelButton.SetDefaultIcon("tradeoff");
+		cancelButton.SetAction('cancel_trade');
+	
+		invUpButton = new("TradeUIButton");
+		invUpButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
+		invUpButton.SetDefaultIcon("arrowup");
+
+		invDownButton = new("TradeUIButton");
+		invDownButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
+		invDownButton.SetDefaultIcon("arrowdn");
+
+		sellUpButton = new("TradeUIButton");
+		sellUpButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
+		sellUpButton.SetDefaultIcon("arrowup");
+
+		sellDownButton = new("TradeUIButton");
+		sellDownButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
+		sellDownButton.SetDefaultIcon("arrowdn");
+
+		buyUpButton = new("TradeUIButton");
+		buyUpButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
+		buyUpButton.SetDefaultIcon("arrowup");
+
+		buyDownButton = new("TradeUIButton");
+		buyDownButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
+		buyDownButton.SetDefaultIcon("arrowdn");
+
+		traderUpButton = new("TradeUIButton");
+		traderUpButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
+		traderUpButton.SetDefaultIcon("arrowup");
+
+		traderDownButton = new("TradeUIButton");
+		traderDownButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
+		traderDownButton.SetDefaultIcon("arrowdn");
+				
+	}
+
+	clearscope String GetItemDescriptionByClass(Name cls) const
+	{
+		for (int i = 0; i < tradeWhitelist.Size(); i++)
+		{
+			if (tradeWhitelist[i].cls == cls)
+			{
+				if (tradeWhitelist[i].description != "")
+					return tradeWhitelist[i].description;
+
+				if (tradeWhitelist[i].displayName != "")
+					return tradeWhitelist[i].displayName;
+
+				return "" .. cls;
+			}
+		}
+
+		return "" .. cls;
+	}
+
+	ui String GetHoveredDescriptionFromColumn(TradeItemColumn col)
+	{
+		if (col == null)
+			return "";
+
+		int hovered = col.GetHoveredIndex(cursor.x, cursor.y);
+		if (hovered == -1)
+			return "";
+
+		let entry = col.GetEntry(hovered);
+		if (entry == null)
+			return "";
+
+		return GetItemDescriptionByClass(entry.cls);
+	}
+
+	ui String GetFirstHoveredDescription()
+	{
+		String txt = GetHoveredDescriptionFromColumn(inventoryColumn);
+		if (txt != "") return txt;
+
+		txt = GetHoveredDescriptionFromColumn(sellColumn);
+		if (txt != "") return txt;
+
+		txt = GetHoveredDescriptionFromColumn(buyColumn);
+		if (txt != "") return txt;
+
+		txt = GetHoveredDescriptionFromColumn(traderColumn);
+		if (txt != "") return txt;
+
+		return "";
+	}
+
+	ui String GetHoveredItemLabel()
+	{
+		if (infoMessage != "")
+			return infoMessage;
+
+		if (qtyDialog.visible)
+			return "";
+
+		return GetFirstHoveredDescription();
+	}
+
+	ui void DrawHoveredItemLabel()
+	{
+		String label = GetHoveredItemLabel();
+		if (label == "")
+			return;
+
+		int textX = inventoryColumn.x;
+		int textY = inventoryColumn.y - 50;
+
+		Screen.DrawText(
+			SmallFont,
+			Font.CR_WHITE,
+			textX,
+			textY,
+			label,
+			DTA_ScaleX, 2,
+			DTA_ScaleY, 2
+		);
+	}
+
+
+	clearscope static TradeUIOverlay Get()
+	{
+		return TradeUIOverlay(StaticEventHandler.Find('TradeUIOverlay'));
+	}
+
+	void SetVisible(bool on)
+	{
+		visible = on;
+		IsUiProcessor = on;
+		RequireMouse = on;
+		cursor.SetVisible(on);
+
+		if (!on)
+		{
+			selectedItemIndex = -1;
+			draggingItem = false;
+			selectedItemClass = '';
+			dragSourceColumn = COL_NONE;
+			lmbHeld = false;
+			cursor.ClearIcon();
+
+			qtyDialog.Close();
+			ClearPendingTransfer();
+		}
+	}
+
+	void UpdateScreenLayout()
+	{
+		SCREEN_W = Screen.GetWidth();
+		SCREEN_H = Screen.GetHeight();
+
+		cursor.SetScreenSize(SCREEN_W, SCREEN_H);
+
+		int gap = int(10 * UIScale);
+		int groupGap = int(30 * UIScale);
+		int totalW = COLUMN_WIDTH * 4 + gap * 2 + groupGap;
+		int startX = (SCREEN_W - totalW) / 2;
+		int topY = int(40 * UIScale);
+
+		inventoryColumn.x = startX;
+		inventoryColumn.y = topY;
+
+		sellColumn.x = inventoryColumn.x + COLUMN_WIDTH + gap;
+		sellColumn.y = topY;
+
+		buyColumn.x = sellColumn.x + COLUMN_WIDTH + groupGap;
+		buyColumn.y = topY;
+
+		traderColumn.x = buyColumn.x + COLUMN_WIDTH + gap;
+		traderColumn.y = topY;
+
+		LayoutButtons();
+	}
+
+	void LayoutButtons()
+	{
+		int listHeight = (MAX_VISIBLE - 1) * SLOT_STEP + SLOT_SIZE;
+		int btnH = SLOT_SIZE / 2;
+		int btnW = SLOT_SIZE / 4;
+
+		int midX = sellColumn.x + COLUMN_WIDTH + (buyColumn.x - (sellColumn.x + COLUMN_WIDTH)) / 2;
+		int tradeW = int(20 * UIScale);
+		int tradeH = int(10 * UIScale);
+	
+		tradeButton.SetPos(midX - tradeW / 2, sellColumn.y + SLOT_STEP * 2);
+		tradeButton.SetSize(tradeW, tradeH);
+
+		cancelButton.SetPos(midX - tradeW / 2, tradeButton.y + tradeH + int(4 * UIScale));
+		cancelButton.SetSize(tradeW, tradeH);
+
+		invUpButton.SetPos(inventoryColumn.x + COLUMN_WIDTH + 2, inventoryColumn.y + listHeight - btnH - btnH/2);
+		invUpButton.SetSize(btnW, btnH / 2);
+
+		invDownButton.SetPos(inventoryColumn.x + COLUMN_WIDTH + 2, inventoryColumn.y + listHeight - btnH);
+		invDownButton.SetSize(btnW, btnH / 2);
+
+		sellUpButton.SetPos(sellColumn.x + COLUMN_WIDTH + 2, sellColumn.y + listHeight - btnH - btnH/2);
+		sellUpButton.SetSize(btnW, btnH / 2);
+
+		sellDownButton.SetPos(sellColumn.x + COLUMN_WIDTH + 2, sellColumn.y + listHeight - btnH);
+		sellDownButton.SetSize(btnW, btnH / 2);
+
+		buyUpButton.SetPos(buyColumn.x + COLUMN_WIDTH + 2, buyColumn.y + listHeight - btnH - btnH/2);
+		buyUpButton.SetSize(btnW, btnH / 2);
+
+		buyDownButton.SetPos(buyColumn.x + COLUMN_WIDTH + 2, buyColumn.y + listHeight - btnH);
+		buyDownButton.SetSize(btnW, btnH / 2);
+
+		traderUpButton.SetPos(traderColumn.x + COLUMN_WIDTH + 2, traderColumn.y + listHeight - btnH - btnH/2);
+		traderUpButton.SetSize(btnW, btnH / 2);
+
+		traderDownButton.SetPos(traderColumn.x + COLUMN_WIDTH + 2, traderColumn.y + listHeight - btnH);
+		traderDownButton.SetSize(btnW, btnH / 2);
+	}
+
+	void CollectInventoryEntries(Actor owner, out Array<TradeUIItemEntry> outEntries)
+	{
+		outEntries.Clear();
+
+		for (let item = owner.Inv; item != null; item = item.Inv)
+		{
+			Name cls = item.GetClassName();
+			TradeItemDef def = FindTradeItemDef(cls);
+
+			if (def == null)
+				continue;
+
+			int found = -1;
+
+			for (int i = 0; i < outEntries.Size(); i++)
+			{
+				if (outEntries[i].cls == cls)
+				{
+					found = i;
+					break;
+				}
+			}
+
+			if (found == -1)
+			{
+			
+				TradeUIItemEntry entry = TradeTextUtil.MakeTradeEntry(cls, item.Amount, def.price, def.icon);
+				outEntries.Push(entry);
+			}
+			else
+			{
+				outEntries[found].count += item.Amount;
+			}
+		}
+	}
+
+	void RebuildPlayerColumns(Actor owner)
+	{
+		Array<TradeUIItemEntry> baseEntries;
+		Array<TradeUIItemEntry> visibleEntries;
+
+		CollectInventoryEntries(owner, baseEntries);
+
+		for (int i = 0; i < baseEntries.Size(); i++)
+		{
+			let base = baseEntries[i];
+			if (base == null)
+				continue;
+
+			int reserved = 0;
+
+			int sellIdx = sellColumn.FindEntryIndexByClass(base.cls);
+			if (sellIdx != -1)
+			{
+				let sellEntry = sellColumn.GetEntry(sellIdx);
+				if (sellEntry != null)
+					reserved = sellEntry.count;
+			}
+
+			int remaining = base.count - reserved;
+			if (remaining <= 0)
+				continue;
+
+			TradeUIItemEntry entry = TradeTextUtil.MakeTradeEntry(
+				base.cls,
+				remaining,
+				base.price,
+				base.icon
+			);
+			visibleEntries.Push(entry);
+		}
+
+		inventoryColumn.SetEntries(visibleEntries);
+
+		int maxScroll = visibleEntries.Size() - MAX_VISIBLE;
+		if (maxScroll < 0)
+			maxScroll = 0;
+
+		if (inventoryColumn.scroll > maxScroll)
+			inventoryColumn.scroll = maxScroll;
+	}
+
+	void RebuildTraderColumn()
+	{
+		Array<TradeUIItemEntry> visibleEntries;
+
+		for (int i = 0; i < traderStock.Size(); i++)
+		{
+			let base = traderStock[i];
+			if (base == null)
+				continue;
+
+			int reserved = 0;
+
+			int buyIdx = buyColumn.FindEntryIndexByClass(base.cls);
+			if (buyIdx != -1)
+			{
+				let buyEntry = buyColumn.GetEntry(buyIdx);
+				if (buyEntry != null)
+					reserved = buyEntry.count;
+			}
+
+			int remaining = base.count - reserved;
+			if (remaining <= 0)
+				continue;
+
+			TradeUIItemEntry entry = TradeTextUtil.MakeTradeEntry(
+				base.cls,
+				remaining,
+				base.price,
+				base.icon
+			);
+			visibleEntries.Push(entry);
+		}
+
+		traderColumn.SetEntries(visibleEntries);
+
+		int maxScroll = visibleEntries.Size() - MAX_VISIBLE;
+		if (maxScroll < 0)
+			maxScroll = 0;
+
+		if (traderColumn.scroll > maxScroll)
+			traderColumn.scroll = maxScroll;
+	}
+
+	void SetTraderStock(Array<TradeUIItemEntry> stock)
+	{
+		traderStock.Clear();
+
+		for (int i = 0; i < stock.Size(); i++)
+		{
+			traderStock.Push(stock[i]);
+		}
+
+		RebuildTraderColumn();
+	}
+	
+	int GetHoveredColumnId(int mx, int my)
+	{
+		if (inventoryColumn.IsInside(mx, my)) return COL_INV;
+		if (sellColumn.IsInside(mx, my)) return COL_SELL;
+		if (buyColumn.IsInside(mx, my)) return COL_BUY;
+		if (traderColumn.IsInside(mx, my)) return COL_TRADER;
+		return COL_NONE;
+	}
+
+	ui int GetDropTargetForSourceUI(int sourceCol)
+	// for ui context
+	{
+		if (sourceCol == COL_INV) return COL_SELL;
+		if (sourceCol == COL_SELL) return COL_INV;
+		if (sourceCol == COL_TRADER) return COL_BUY;
+		if (sourceCol == COL_BUY) return COL_TRADER;
+		return COL_NONE;
+	}
+
+	int GetDropTargetForSource(int sourceCol)
+	// for play context
+	{
+		if (sourceCol == COL_INV) return COL_SELL;
+		if (sourceCol == COL_SELL) return COL_INV;
+		if (sourceCol == COL_TRADER) return COL_BUY;
+		if (sourceCol == COL_BUY) return COL_TRADER;
+		return COL_NONE;
+	}
+
+	TradeItemColumn GetColumnById(int id)
+	{
+		switch (id)
+		{
+			case COL_INV: return inventoryColumn;
+			case COL_SELL: return sellColumn;
+			case COL_BUY: return buyColumn;
+			case COL_TRADER: return traderColumn;
+		}
+		return null;
+	}
+
+	bool TryStartDragFromColumn(TradeItemColumn col, int colId, int vx, int vy)
+	{
+		if (col == null)
+			return false;
+
+		int index = col.GetHoveredIndex(vx, vy);
+		if (index == -1)
+			return false;
+
+		let entry = col.GetEntry(index);
+		if (entry == null)
+			return false;
+
+		draggingItem = true;
+		dragSourceColumn = colId;
+		selectedItemIndex = index;
+		selectedItemClass = entry.cls;
+
+		TextureID icon = entry.icon;
+		if (!icon.isValid())
+			icon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
+
+		cursor.SetIcon(icon);
+		cursor.SetPos(vx, vy);
+		return true;
+	}
+
+//// TRADING LOGIC ////
+	bool RemoveItemFromActorInventory(Actor owner, Name cls, int amount)
+	{
+		if (!owner || amount <= 0)
+			return false;
+
+		for (let item = owner.Inv; item != null; item = item.Inv)
+		{
+			if (item.GetClassName() == cls)
+			{
+				if (item.Amount > amount)
+				{
+					item.Amount -= amount;
+					return true;
+				}
+
+				item.Amount = 0;
+				item.Destroy();
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	void GiveItemToActorInventory(Actor owner, Name cls, int amount)
+	{
+		if (!owner || amount <= 0)
+			return;
+
+		owner.A_GiveInventory("" .. cls, amount);
+	}
+
+	void AddOrMergeTraderStock(TradeUIItemEntry item)
+	{
+		for (int i = 0; i < traderStock.Size(); i++)
+		{
+			if (traderStock[i].cls == item.cls)
+			{
+				traderStock[i].count += item.count;
+				return;
+			}
+		}
+
+		TradeItemDef def = FindTradeItemDef(item.cls);
+		if (def == null)
+			return;
+
+		TradeUIItemEntry entry = TradeTextUtil.MakeTradeEntry(item.cls, item.count, def.price, def.icon);
+		traderStock.Push(entry);
+	}
+
+	void RemoveTraderStockAmount(Name cls, int amount)
+	{
+		for (int i = 0; i < traderStock.Size(); i++)
+		{
+			if (traderStock[i].cls == cls)
+			{
+				traderStock[i].count -= amount;
+				if (traderStock[i].count <= 0)
+					traderStock.Delete(i);
+				return;
+			}
+		}
+	}
+
+	void PerformTrade()
+	{
+		int sellTotal = sellColumn.GetTotalPrice();
+		int buyTotal = buyColumn.GetTotalPrice();
+
+		if (buyTotal > sellTotal)
+		{
+			infoMessage = "Sorry, no trade.";
+			return;
+		}
+
+		let p = players[consoleplayer];
+		if (!p || !p.mo)
+			return;
+
+		for (int i = 0; i < sellColumn.entries.Size(); i++)
+		{
+			let entry = sellColumn.entries[i];
+			if (entry == null)
+				continue;
+
+			RemoveItemFromActorInventory(p.mo, entry.cls, entry.count);
+			AddOrMergeTraderStock(entry);
+		}
+
+		for (int i = 0; i < buyColumn.entries.Size(); i++)
+		{
+			let entry = buyColumn.entries[i];
+			if (entry == null)
+				continue;
+
+			GiveItemToActorInventory(p.mo, entry.cls, entry.count);
+			RemoveTraderStockAmount(entry.cls, entry.count);
+		}
+		
+		sellColumn.Clear();
+		buyColumn.Clear();
+
+		RebuildPlayerColumns(p.mo);
+		RebuildTraderColumn();
+
+		let nstate = TraderStateHandler.Get();
+		if (nstate != null && currentTraderKey != "")
+		{
+			nstate.SetLiveTraderStock(currentTraderKey, traderStock);
+		}
+
+		infoMessage = "Good trade.";
+	}
+	
+	void CancelTrade()
+	{
+		selectedItemIndex = -1;
+		draggingItem = false;
+		selectedItemClass = '';
+		dragSourceColumn = COL_NONE;
+		lmbHeld = false;
+
+		sellColumn.Clear();
+		buyColumn.Clear();
+		cursor.ClearIcon();
+
+		let p = players[consoleplayer];
+		if (p && p.mo)
+		{
+			RebuildPlayerColumns(p.mo);
+		}
+
+		RebuildTraderColumn();
+
+		infoMessage = "Trade cancelled.";
+	}
+///////////////////////
+
+	bool TryScrollButton(TradeUIButton button, TradeItemColumn col, bool up)
+	{
+		if (!ProcessButtonClick(button))
+			return false;
+
+		if (up) col.ScrollUp();
+		else col.ScrollDown();
+		return true;
+	}
+
+	bool ProcessButtons()
+	{
+		if (qtyDialog.visible)
+			return ProcessQuantityDialogButtons();
+
+		if (TryScrollButton(invUpButton, inventoryColumn, true)) return true;
+		if (TryScrollButton(invDownButton, inventoryColumn, false)) return true;
+		if (TryScrollButton(sellUpButton, sellColumn, true)) return true;
+		if (TryScrollButton(sellDownButton, sellColumn, false)) return true;
+		if (TryScrollButton(buyUpButton, buyColumn, true)) return true;
+		if (TryScrollButton(buyDownButton, buyColumn, false)) return true;
+		if (TryScrollButton(traderUpButton, traderColumn, true)) return true;
+		if (TryScrollButton(traderDownButton, traderColumn, false)) return true;
+		if (ProcessButtonClick(tradeButton) || ProcessButtonClick(cancelButton))
+			return true;
+
+		return false;
+	}
+
+	override void WorldTick()
+	{
+		let p = players[consoleplayer];
+		if (!p || !p.mo)
+			return;
+
+// 		RebuildPlayerColumns(p.mo);
+// 		RebuildTraderColumn();
+	}
+
+	bool ScrollHoveredColumn(int mx, int my, bool up)
+	{
+		if (inventoryColumn.IsInside(mx, my))
+		{
+			if (up) inventoryColumn.ScrollUp(); else inventoryColumn.ScrollDown();
+			return true;
+		}
+		if (sellColumn.IsInside(mx, my))
+		{
+			if (up) sellColumn.ScrollUp(); else sellColumn.ScrollDown();
+			return true;
+		}
+		if (buyColumn.IsInside(mx, my))
+		{
+			if (up) buyColumn.ScrollUp(); else buyColumn.ScrollDown();
+			return true;
+		}
+		if (traderColumn.IsInside(mx, my))
+		{
+			if (up) traderColumn.ScrollUp(); else traderColumn.ScrollDown();
+			return true;
+		}
+		return false;
+	}
+
+	override void NetworkProcess(ConsoleEvent e)
+	{
+		if (e.Name == "tradeui_toggle")
+		{
+			SetVisible(!visible);
+			return;
+		}
+			
+		if (e.Name == "do_trade")
+		{
+			PerformTrade();
+			return;
+		}
+				
+		if (e.Name == "open_tradeui_id")
+		{
+			let reg = TraderRegistry.Get();
+			if (reg != null)
+			{
+				String key = reg.FindKeyByNetId(e.Args[0]);
+				if (key != "")
+				{
+					Console.Printf("Opening trader by id: %d -> %s", e.Args[0], key);
+					OpenForTraderKey(key);
+				}
+				else
+				{
+					Console.Printf("No trader for id %d", e.Args[0]);
+				}
+			}
+			return;
+		}
+			
+		if (e.Name == "open_tradeui_for")
+		{
+			Console.printf("Opening");
+			let p = players[consoleplayer];
+			if (p != null && p.ConversationNPC != null)
+			{
+				Console.printf("Trader:, %s", p.ConversationNPC);
+				OpenForTraderActor(p.ConversationNPC);
+			}
+			else
+			{
+				infoMessage = "No trader.";
+			}
+			return;
+		}
+		
+		if (e.Name == "cancel_trade")
+		{
+			CancelTrade();
+			return;
+		}	
+		
+		if (e.Name == "scrollup_toggle" || e.Name == "mwheel_up")
+		{
+			ScrollHoveredColumn(e.Args[0], e.Args[1], true);
+			return;
+		}
+
+		if (e.Name == "scrolldown_toggle" || e.Name == "mwheel_down")
+		{
+			ScrollHoveredColumn(e.Args[0], e.Args[1], false);
+			return;
+		}
+
+		if (e.Name == "lmb_up")
+		{
+			int vx = e.Args[0];
+			int vy = e.Args[1];
+
+			if (qtyDialog.visible)
+			{
+				cursor.SetPos(vx, vy);
+
+				if (lmbHeld)
+				{
+					lmbHeld = false;
+					ProcessQuantityDialogButtons();
+				}
+				return;
+			}
+
+			if (draggingItem)
+			{
+				int hoveredCol = GetHoveredColumnId(vx, vy);
+				int targetCol = GetDropTargetForSource(dragSourceColumn);
+
+				if (hoveredCol == targetCol)
+				{
+					let src = GetColumnById(dragSourceColumn);
+					let dst = GetColumnById(targetCol);
+
+					if (src != null && dst != null)
+					{
+						let entry = src.GetEntry(selectedItemIndex);
+
+						if (entry != null)
+						{
+							if (entry.count > 1)
+							{
+								int sourceCol = dragSourceColumn;
+								int destCol = targetCol;
+
+								selectedItemIndex = -1;
+								draggingItem = false;
+								dragSourceColumn = COL_NONE;
+								selectedItemClass = '';
+								cursor.ClearIcon();
+
+								OpenQuantityDialog(entry, sourceCol, destCol);
+								return;
+							}
+
+							pendingSourceColumn = dragSourceColumn;
+							pendingTargetColumn = targetCol;
+							pendingItemClass = entry.cls;
+							ExecuteTransferAmount(1);
+							return;
+						}					}
+				}
+			}
+
+			selectedItemIndex = -1;
+			draggingItem = false;
+			dragSourceColumn = COL_NONE;
+			selectedItemClass = '';
+			cursor.ClearIcon();
+
+			if (lmbHeld)
+			{
+				lmbHeld = false;
+				if (ProcessButtons())
+					return;
+			}
+
+			return;
+		}
+
+		if (e.Name == "lmb_down")
+		{
+			lmbHeld = true;
+
+			int vx = e.Args[0];
+			int vy = e.Args[1];
+
+			if (TryStartDragFromColumn(inventoryColumn, COL_INV, vx, vy)) return;
+			if (TryStartDragFromColumn(sellColumn, COL_SELL, vx, vy)) return;
+			if (TryStartDragFromColumn(buyColumn, COL_BUY, vx, vy)) return;
+			if (TryStartDragFromColumn(traderColumn, COL_TRADER, vx, vy)) return;
+
+			return;
+		}
+		
+		if (e.Name == "qty_plus")
+		{
+			qtyDialog.AddOne();
+			return;
+		}
+
+		if (e.Name == "qty_minus")
+		{
+			qtyDialog.RemoveOne();
+			return;
+		}
+
+		if (e.Name == "qty_all")
+		{
+			qtyDialog.SetAll();
+			return;
+		}
+
+		if (e.Name == "qty_ok")
+		{
+			ExecuteTransferAmount(qtyDialog.quantity);
+			return;
+		}
+
+		if (e.Name == "qty_cancel")
+		{
+			CancelQuantityDialog();
+			return;
+		}
+	}
+
+	bool ProcessButtonClick(TradeUIButton button)
+	{
+		if (button == null)
+			return false;
+
+		if (button.IsInside(cursor.x, cursor.y))
+		{
+			button.Activate(self);
+			return true;
+		}
+
+		return false;
+	}
+
+	override bool UiProcess(UiEvent e)
+	{
+		if (!visible)
+			return false;
+
+		if (qtyDialog.visible)
+		{
+			if (e.Type == UiEvent.Type_MouseMove)
+			{
+				cursor.SetPos(e.MouseX, e.MouseY);
+				return true;
+			}
+
+			if (e.Type == UiEvent.Type_LButtonDown)
+			{
+				SendNetworkEvent("lmb_down", cursor.x, cursor.y);
+				return true;
+			}
+
+			if (e.Type == UiEvent.Type_LButtonUp)
+			{
+				SendNetworkEvent("lmb_up", cursor.x, cursor.y);
+				return true;
+			}
+
+			if (e.Type == UiEvent.Type_WheelUp)
+			{
+				SendNetworkEvent("qty_plus");
+				return true;
+			}
+
+			if (e.Type == UiEvent.Type_WheelDown)
+			{
+				SendNetworkEvent("qty_minus");
+				return true;
+			}
+
+			if (e.Type == UiEvent.Type_KeyDown)
+			{
+				if (e.KeyChar == 27) // ESC
+				{
+					SendNetworkEvent("qty_cancel");
+					return true;
+				}
+			}
+
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_MouseMove)
+		{
+			cursor.SetPos(e.MouseX, e.MouseY);
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_LButtonDown)
+		{
+			SendNetworkEvent("lmb_down", cursor.x, cursor.y);
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_LButtonUp)
+		{
+			SendNetworkEvent("lmb_up", cursor.x, cursor.y);
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_WheelUp)
+		{
+			SendNetworkEvent("mwheel_up", cursor.x, cursor.y);
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_WheelDown)
+		{
+			SendNetworkEvent("mwheel_down", cursor.x, cursor.y);
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_KeyDown)
+		{
+			if (e.KeyChar == 67 || e.KeyChar == 99 || e.KeyChar == 27)
+			{
+				SendNetworkEvent("tradeui_toggle");
+				return true;
+			}
+
+			if (e.KeyChar == 87 || e.KeyChar == 119)
+			{
+				SendNetworkEvent("scrollup_toggle", cursor.x, cursor.y);
+				return true;
+			}
+
+			if (e.KeyChar == 83 || e.KeyChar == 115)
+			{
+				SendNetworkEvent("scrolldown_toggle", cursor.x, cursor.y);
+				return true;
+			}
+		}
+
+		return true;
+	}
+	
+	override bool InputProcess(InputEvent e)
+	{
+		if (e.Type == InputEvent.Type_KeyDown)
+		{
+			if (e.KeyChar == 99) // c
+			{
+				SendNetworkEvent("tradeui_toggle");
+				return true;
+			}
+
+			if (e.KeyChar == 116 || e.KeyChar == 84) // t / T
+			{
+				SendNetworkEvent("open_tradeui_id", 2);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	ui void DrawDecorativeTexture(TextureID tex, double x, double y)
+	{
+		Screen.DrawTexture(tex, false, x, y,
+			DTA_VirtualWidth, UI_VW,
+			DTA_VirtualHeight, UI_VH,
+			DTA_Alpha, 0.3,
+			DTA_KeepRatio, true,
+			DTA_TopLeft, true
+		);
+	}
+	
+	ui void DrawColumnName(int x, int y, String colname)
+	{
+		int offsetX = 8;
+		int offsetY = -20;
+		
+		Screen.DrawText(
+			SmallFont,
+			Font.CR_WHITE,
+			x + offsetX,
+			y + offsetY,
+			colname,
+			DTA_ScaleX, 2,
+			DTA_ScaleY, 2
+		);
+	}
+	
+	ui void DrawBackgroundPanel(){
+	
+		TextureID bg = TexMan.CheckForTexture("BGPANEL", TexMan.TYPE_Any);
+		if (bg.isValid())
+		{
+			Vector2 sz = TexMan.GetScaledSize(bg);
+
+			double panelX = (UI_VW - sz.x) * 0.5;
+			double panelY = (UI_VH - sz.y) * 0.3;
+
+			DrawDecorativeTexture(bg, panelX, panelY);
+		}
+	}
+
+	ui void DrawButton(TradeUIButton btn)
+	{
+		bool hov = false;
+		bool pressed = false;
+
+		if (!qtyDialog.visible)
+		{
+			hov = btn.IsInside(cursor.x, cursor.y);
+			pressed = hov && lmbHeld;
+		}
+
+		btn.Draw(hov, pressed);
+	}
+
+	override void RenderOverlay(RenderEvent e)
+	{
+		if (!visible)
+			return;
+
+		DrawBackgroundPanel();
+		
+		int invSelected = -1;
+		int sellSelected = -1;
+		int buySelected = -1;
+		int traderSelected = -1;
+
+		if (draggingItem)
+		{
+			if (dragSourceColumn == COL_INV)
+				invSelected = selectedItemIndex;
+			else if (dragSourceColumn == COL_SELL)
+				sellSelected = selectedItemIndex;
+			else if (dragSourceColumn == COL_BUY)
+				buySelected = selectedItemIndex;
+			else if (dragSourceColumn == COL_TRADER)
+				traderSelected = selectedItemIndex;
+		}
+
+		int hoveredInv = -1;
+		int hoveredSell = -1;
+		int hoveredBuy = -1;
+		int hoveredTrader = -1;
+
+		if (!qtyDialog.visible)
+		{
+			hoveredInv = inventoryColumn.GetHoveredIndex(cursor.x, cursor.y);
+			hoveredSell = sellColumn.GetHoveredIndex(cursor.x, cursor.y);
+			hoveredBuy = buyColumn.GetHoveredIndex(cursor.x, cursor.y);
+			hoveredTrader = traderColumn.GetHoveredIndex(cursor.x, cursor.y);
+		}
+
+		int dropTarget = COL_NONE;
+
+		if (!qtyDialog.visible && draggingItem)
+			dropTarget = GetDropTargetForSourceUI(dragSourceColumn);
+
+		inventoryColumn.SetHighlighted(!qtyDialog.visible && dropTarget == COL_INV && inventoryColumn.IsInside(cursor.x, cursor.y));
+		sellColumn.SetHighlighted(!qtyDialog.visible && dropTarget == COL_SELL && sellColumn.IsInside(cursor.x, cursor.y));
+		buyColumn.SetHighlighted(!qtyDialog.visible && dropTarget == COL_BUY && buyColumn.IsInside(cursor.x, cursor.y));
+		traderColumn.SetHighlighted(!qtyDialog.visible && dropTarget == COL_TRADER && traderColumn.IsInside(cursor.x, cursor.y));
+
+		inventoryColumn.Draw(hoveredInv, invSelected);
+		sellColumn.Draw(hoveredSell, sellSelected);
+		buyColumn.Draw(hoveredBuy, buySelected);
+		traderColumn.Draw(hoveredTrader, traderSelected);
+
+		DrawHoveredItemLabel();
+		DrawColumnName(inventoryColumn.x, inventoryColumn.y, "INV");
+		DrawColumnName(sellColumn.x, sellColumn.y, "SELL");
+		DrawColumnName(buyColumn.x, buyColumn.y, "BUY");
+		DrawColumnName(traderColumn.x, traderColumn.y, "TRADER");
+
+		DrawButton(invUpButton);
+		DrawButton(invDownButton);
+		DrawButton(sellUpButton);
+		DrawButton(sellDownButton);
+		DrawButton(buyUpButton);
+		DrawButton(buyDownButton);
+		DrawButton(traderUpButton);
+		DrawButton(traderDownButton);
+		DrawButton(tradeButton);
+		DrawButton(cancelButton);
+
+		if (qtyDialog.visible)
+		{
+			qtyDialog.Draw(cursor.x, cursor.y, lmbHeld);
+		}
+		
+		cursor.Draw();
+	}
+}

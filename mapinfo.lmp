@@ -1,0 +1,6 @@
+GameInfo
+{
+	AddEventHandlers = "TraderRegistry", "TraderStateHandler", "TradeUIOverlay"
+	DefaultConversationMenuClass = "NewConversationMenu"
+
+}

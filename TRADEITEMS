@@ -1,0 +1,21 @@
+// this is "the whitelist".
+// everything not described here will be ignored by trading system.
+// So you wouldn't be able to sell Jimmy your rads or battery charge.
+// ...
+// Unless you want to, of course.
+// the format is self-explanatory, but still -
+// cls | name | description | price | icon
+
+policepistol | Police Pistol | Standard sidearm. | 120 | 590GA0
+ninemilammo | 9mm Ammo | Ammo for 9mm weapons. | 2 | CLIPA0
+shotgunammo | Shotgun Ammo | Shells for shotguns. | 4 | SBOXA0
+bowammo | Bow Ammo | Arrows or bolts. | 6 | CELLA0
+chips | Chips | Trade currency. | 1 | SEL1D0
+leveraction | Lever-action shotgun | Your personal handgun. | 250 | GRIGA0
+ThumperAmmo | Thumper Ammo | Those thumping things for thumper. | 10 | GRIGA0
+Thumper | Thumper | Thumper be thumpin. | 600 | GRIGA0
+XBOW | X-Bow | A metallic crossbow. Pretty heavy. | 250 | XBWPA0
+rifleAmmo | Rifle ammo | 5.56 Ammo. | 5 | LOOSA0
+pipebomb | Pipebomb | A long, cold cylinder with explosive contents. | 10 | ROCKA0
+firstaid | First aid kit | This might come in handy if you're bleeding. | 10 | INVMA0
+
