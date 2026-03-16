@@ -9,8 +9,8 @@ item2, amount
 ...
 }
 
-all item prices, except for those with the custom_price, are multiplied by
-greed_modifier. If there's none, greed_modifier is 1 by default.
+all item prices, except for items with the custom_price set, are multiplied 
+by greed_modifier. If there's none, greed_modifier is 1 by default.
 
 
  -= How to use shops in dialog =-
@@ -31,7 +31,7 @@ trader Vance
 
 }
 
-trader Jimmy, 1.2 // all prices 20% higher, cause 1.2
+trader Jimmy, 1.2 // all prices are 20% higher, cause 1.2
 {
     chips, 160
     bowammo, 8
