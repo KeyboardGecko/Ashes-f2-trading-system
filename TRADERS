@@ -28,20 +28,23 @@ trader Vance
     ninemilammo, 20
     shotgunammo, 10
 	chips, 250
-
+	FoodTin1, 6
+	XBOW, 1
+	XBow3, 1
+	XBow5, 1
 }
 
 trader Jimmy, 1.2 // all prices are 20% higher, cause 1.2
 {
     chips, 160
-    bowammo, 8
+    XBowAmmo, 32
+	batteryreload, 30
 	firstaid, 4
 	policepistol, 1, 111 // custom price again
     ninemilammo, 20
     shotgunammo, 10
 	pipebomb, 2
-	XBOW, 1
 	rifleammo, 30
-	thumperammo, 1, 999 // and again
+	thumperammo, 1, 99 // and again
 
 }
