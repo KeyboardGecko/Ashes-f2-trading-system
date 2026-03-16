@@ -2,7 +2,11 @@
 
 A trading system just like in fallout 2? IN MY ASHES? YES PLEASE!
 
-Refer to TRADERS and TRADEITEMS for how-to.
+# To implement it into your project:
+ 1. put everything from GameInfo section into GameInfo section of of your mod's MAPINFO lump;
+ 2. put #include "zscript/AshesTradingSystem.zc" into ZSCRIPT.ZC.
 
-Completely functional, aside from some QoL I need to add. But may not work out-of-the-box due to being tested (and tailored to) Ashes: Hard Reset.
-Will fix that later.
+# To use:
+Refer to TRADERS and TRADEITEMS lumps.
+
+Have fun.
