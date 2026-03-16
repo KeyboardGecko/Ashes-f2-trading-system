@@ -4,9 +4,9 @@ data format goes like this:
 
 trader <unique_trader_key>, <greed_modifier>
 {
-item1, amount, custom_price(optional)
-item2, amount 
-...
+	item1, amount, custom_price(optional)
+	item2, amount 
+	...
 }
 
 all item prices, except for items with the custom_price set, are multiplied 

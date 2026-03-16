@@ -2990,7 +2990,7 @@ class TradeUIOverlay : EventHandler
 		Screen.DrawTexture(tex, false, x, y,
 			DTA_VirtualWidth, UI_VW,
 			DTA_VirtualHeight, UI_VH,
-			DTA_Alpha, 0.3,
+			DTA_Alpha, 0.5,
 			DTA_KeepRatio, true,
 			DTA_TopLeft, true
 		);
