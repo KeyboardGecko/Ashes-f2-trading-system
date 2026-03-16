@@ -1,6 +1,6 @@
 // this is "the whitelist".
-// everything not described here will be ignored by trading system.
-// So you wouldn't be able to sell Jimmy your rads or battery charge.
+// everything not described here will be ignored by the trading system,
+// so you wouldn't be able to sell Jimmy your rads or battery charge.
 // ...
 // Unless you want to, of course.
 // the format is self-explanatory, but still -

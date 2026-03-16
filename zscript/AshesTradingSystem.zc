@@ -29,7 +29,7 @@ class NewConversationMenu : ConversationMenu
 		if (tagPos < 0)
 			return "";
 
-		int start = tagPos + 7; // после "[trade "
+		int start = tagPos + 7; 
 		int end = txt.IndexOf("]", start);
 		if (end < 0)
 			return "";
@@ -89,7 +89,7 @@ class NewConversationMenu : ConversationMenu
 
 						EventHandler.SendNetworkEvent("open_tradeui_id", traderId);
 
-						// потом закрываем меню
+						// close menu, interrupting dialog (better this way)
 						Close();
 						return true;
 					}
@@ -119,7 +119,7 @@ class NewConversationMenu : ConversationMenu
 			mShowGold |= reply.NeedsGold;
 
 			let ReplyText = StringTable.Localize(reply.Reply);
-			ReplyText = StripTradeTag(ReplyText); // <-- вот это добавили
+			ReplyText = StripTradeTag(ReplyText); 
 
 			if (reply.NeedsGold)
 			{
@@ -1111,17 +1111,20 @@ class TradeItemColumn : Object
 			if (i == selectedIndex)
 				alpha = 0.35;
 
-// 			TextureID whiteTex = TexMan.CheckForTexture("wpx", TexMan.TYPE_Any);
-// 			if (whiteTex.isValid())
-// 			{
-// 				Screen.DrawTexture(whiteTex, false, iconX, iconY,
-// 					DTA_DestWidth, slotSize,
-// 					DTA_DestHeight, slotSize,
-// 					DTA_Alpha, 0.15,
-// 					DTA_TopLeft, true
-// 				);
-// 			}
-
+			// uncomment this if you want to highlight slots
+			/*
+			TextureID whiteTex = TexMan.CheckForTexture("wpx", TexMan.TYPE_Any);
+			if (whiteTex.isValid())
+			{
+				Screen.DrawTexture(whiteTex, false, iconX, iconY,
+					DTA_DestWidth, slotSize,
+					DTA_DestHeight, slotSize,
+					DTA_Alpha, 0.15,
+					DTA_TopLeft, true
+				);
+			} 
+			*/
+			
 			if (icon.isValid())
 				TradeDrawUtil.DrawTextureFitted(icon, iconX, iconY, slotSize, slotSize, alpha);
 
@@ -2522,8 +2525,6 @@ class TradeUIOverlay : EventHandler
 		if (!p || !p.mo)
 			return;
 
-// 		RebuildPlayerColumns(p.mo);
-// 		RebuildTraderColumn();
 	}
 
 	bool ScrollHoveredColumn(int mx, int my, bool up)
@@ -2884,26 +2885,6 @@ class TradeUIOverlay : EventHandler
 		return true;
 	}
 	
-	override bool InputProcess(InputEvent e)
-	{
-		if (e.Type == InputEvent.Type_KeyDown)
-		{
-			if (e.KeyChar == 99) // c
-			{
-				SendNetworkEvent("tradeui_toggle");
-				return true;
-			}
-
-			if (e.KeyChar == 116 || e.KeyChar == 84) // t / T
-			{
-				SendNetworkEvent("open_tradeui_id", 2);
-				return true;
-			}
-		}
-
-		return false;
-	}
-
 	ui void DrawDecorativeTexture(TextureID tex, double x, double y)
 	{
 		Screen.DrawTexture(tex, false, x, y,
