@@ -224,12 +224,13 @@ class TradeTextUtil : Object
 
 		return entry;
 	}
-	
-	static TraderStockItem MakeTraderStockItem(Name cls, int count)
+		
+	static TraderStockItem MakeTraderStockItem(Name cls, int count, int price = 0)
 	{
 		TraderStockItem item = TraderStockItem(new("TraderStockItem"));
 		item.cls = cls;
 		item.count = count;
+		item.price = price;
 		return item;
 	}
 	
@@ -319,6 +320,7 @@ class TradeDrawUtil : Object
 class TraderStockDef : Object
 {
 	String traderKey;
+	double priceMultiplier; // if we want to make our vendors greedy
 	Array<TraderStockItem> items;
 }
 
@@ -356,28 +358,38 @@ class TraderRegistry : StaticEventHandler
 		return "";
 	}
 
-	bool ParseTraderItemLine(String line, out Name outCls, out int outCount)
+	bool ParseTraderItemLine(String line, out Name outCls, out int outCount, out int outPrice)
 	{
 		line = TradeTextUtil.TrimString(line);
 		if (line == "")
 			return false;
 
-		int commaPos = line.IndexOf(",");
-		if (commaPos == -1)
+		Array<String> parts;
+		line.Split(parts, ",");
+
+		if (parts.Size() < 2)
 			return false;
 
-		String clsStr = TradeTextUtil.TrimString(line.Left(commaPos));
-		String countStr = TradeTextUtil.TrimString(line.Mid(commaPos + 1));
+		String clsStr = TradeTextUtil.TrimString(parts[0]);
+		String countStr = TradeTextUtil.TrimString(parts[1]);
 
 		if (clsStr == "" || countStr == "")
 			return false;
 
 		outCls = clsStr;
 		outCount = countStr.ToInt();
+		outPrice = 0;
+
+		if (parts.Size() >= 3)
+		{
+			String priceStr = TradeTextUtil.TrimString(parts[2]);
+			if (priceStr != "")
+				outPrice = priceStr.ToInt();
+		}
 
 		return outCount > 0;
 	}
-
+	
 	TraderStockDef CloneTraderStockDef(TraderStockDef src)
 	{
 		if (src == null)
@@ -385,6 +397,7 @@ class TraderRegistry : StaticEventHandler
 
 		TraderStockDef dst = TraderStockDef(new("TraderStockDef"));
 		dst.traderKey = src.traderKey;
+		dst.priceMultiplier = src.priceMultiplier;
 
 		for (int i = 0; i < src.items.Size(); i++)
 		{
@@ -392,11 +405,43 @@ class TraderRegistry : StaticEventHandler
 			if (item == null)
 				continue;
 
-			TraderStockItem cloned = TradeTextUtil.MakeTraderStockItem(item.cls, item.count);
+			TraderStockItem cloned = TradeTextUtil.MakeTraderStockItem(item.cls, item.count, item.price);
 			dst.items.Push(cloned);
 		}
 
 		return dst;
+	}
+
+	bool ParseTraderHeaderLine(String line, out String outKey, out double outMultiplier)
+	{
+		outKey = "";
+		outMultiplier = 1.0;
+
+		if (line.Left(7) != "trader ")
+			return false;
+
+		String rest = TradeTextUtil.TrimString(line.Mid(7));
+		if (rest == "")
+			return false;
+
+		Array<String> parts;
+		rest.Split(parts, ",");
+
+		outKey = TradeTextUtil.TrimString(parts[0]);
+		if (outKey == "")
+			return false;
+
+		if (parts.Size() >= 2)
+		{
+			String mulStr = TradeTextUtil.TrimString(parts[1]);
+			if (mulStr != "")
+				outMultiplier = mulStr.ToDouble();
+		}
+
+		if (outMultiplier <= 0)
+			outMultiplier = 1.0;
+
+		return true;
 	}
 
 	void LoadDefaults()
@@ -447,9 +492,14 @@ class TraderRegistry : StaticEventHandler
 
 			if (!insideBlock && line.Left(7) == "trader ")
 			{
-				currentTrader = TradeTextUtil.TrimString(line.Mid(7));
-				if (currentTrader != "")
-					AddTrader(currentTrader);
+				String traderKey = "";
+				double traderMul = 1.0;
+
+				if (ParseTraderHeaderLine(line, traderKey, traderMul))
+				{
+					currentTrader = traderKey;
+					AddTrader(currentTrader, traderMul);
+				}
 				continue;
 			}
 
@@ -469,11 +519,12 @@ class TraderRegistry : StaticEventHandler
 
 			if (insideBlock && currentTrader != "")
 			{
-				Name cls = '';
-				int count = 0;
+			Name cls = '';
+			int count = 0;
+			int price = 0;
 
-				if (ParseTraderItemLine(line, cls, count))
-					AddTraderItem(currentTrader, cls, count);
+			if (ParseTraderItemLine(line, cls, count, price))
+				AddTraderItem(currentTrader, cls, count, price);			
 			}
 		}
 
@@ -490,17 +541,18 @@ class TraderRegistry : StaticEventHandler
 		return null;
 	}
 
-	void AddTrader(String key)
+	void AddTrader(String key, double priceMultiplier = 1.0)
 	{
 		if (FindDef(key) != null)
 			return;
 
 		TraderStockDef def = TraderStockDef(new("TraderStockDef"));
 		def.traderKey = key;
+		def.priceMultiplier = priceMultiplier;
 		defs.Push(def);
 	}
 
-	void AddTraderItem(String key, Name cls, int count)
+	void AddTraderItem(String key, Name cls, int count, int price = 0)
 	{
 		if (count <= 0)
 			return;
@@ -519,11 +571,16 @@ class TraderRegistry : StaticEventHandler
 			if (trader.items[i].cls == cls)
 			{
 				trader.items[i].count += count;
+
+				// если в новой записи цена задана, обновляем её
+				if (price > 0)
+					trader.items[i].price = price;
+
 				return;
 			}
 		}
 
-		TraderStockItem entry = TradeTextUtil.MakeTraderStockItem(cls, count);
+		TraderStockItem entry = TradeTextUtil.MakeTraderStockItem(cls, count, price);
 		trader.items.Push(entry);
 	}
 }
@@ -632,10 +689,18 @@ class TraderStateHandler : EventHandler
 				continue;
 			}
 
+			int finalPrice = src.price;
+			if (finalPrice <= 0)
+			{
+				finalPrice = int(itemDef.price * trader.priceMultiplier + 0.5);
+				if (finalPrice <= 0)
+					finalPrice = 1;
+			}
+
 			TradeUIItemEntry entry = TradeTextUtil.MakeTradeEntry(
 				src.cls,
 				src.count,
-				itemDef.price,
+				finalPrice,
 				itemDef.icon
 			);
 			outItems.Push(entry);
@@ -644,6 +709,21 @@ class TraderStateHandler : EventHandler
 		Console.Printf("BuildTraderStock result items=%d", outItems.Size());
 	}
 
+	int GetLiveTraderItemPrice(String key, Name cls)
+	{
+		let trader = FindDef(key);
+		if (trader == null)
+			return 0;
+
+		for (int i = 0; i < trader.items.Size(); i++)
+		{
+			if (trader.items[i].cls == cls)
+				return trader.items[i].price;
+		}
+
+		return 0;
+	}
+	
 	void SetLiveTraderStock(String key, Array<TradeUIItemEntry> newStock)
 	{
 		EnsureInitialized();
@@ -655,7 +735,7 @@ class TraderStateHandler : EventHandler
 			return;
 		}
 
-		trader.items.Clear();
+		Array<TraderStockItem> rebuilt;
 
 		for (int i = 0; i < newStock.Size(); i++)
 		{
@@ -663,8 +743,16 @@ class TraderStateHandler : EventHandler
 			if (item == null)
 				continue;
 
-			TraderStockItem stockItem = TradeTextUtil.MakeTraderStockItem(item.cls, item.count);
-			trader.items.Push(stockItem);
+			int preservedPrice = GetLiveTraderItemPrice(key, item.cls);
+			TraderStockItem stockItem = TradeTextUtil.MakeTraderStockItem(item.cls, item.count, preservedPrice);
+			rebuilt.Push(stockItem);
+		}
+
+		trader.items.Clear();
+
+		for (int j = 0; j < rebuilt.Size(); j++)
+		{
+			trader.items.Push(rebuilt[j]);
 		}
 
 		Console.Printf("SetLiveTraderStock key=%s items=%d", key, trader.items.Size());
@@ -836,6 +924,7 @@ class TraderStockItem : Object
 {
 	Name cls;
 	int count;
+	int price; // 0 = use default price from TRADEITEMS
 }
 
 
@@ -1595,6 +1684,8 @@ class TradeUIOverlay : EventHandler
 	int pendingTargetColumn;
 	Name pendingItemClass;
 
+	int pendingItemPrice;
+
 	override void OnRegister()
 	{	
 		UIScale = 4;
@@ -1651,6 +1742,8 @@ class TradeUIOverlay : EventHandler
 		pendingTargetColumn = COL_NONE;
 		pendingItemClass = '';
 
+		pendingItemPrice = 0;
+
 		lmbHeld = false;
 		
 		LoadTradeWhitelistFromLump();
@@ -1669,6 +1762,7 @@ class TradeUIOverlay : EventHandler
 		pendingSourceColumn = COL_NONE;
 		pendingTargetColumn = COL_NONE;
 		pendingItemClass = '';
+		pendingItemPrice = 0;
 	}
 
 	void OpenQuantityDialog(TradeUIItemEntry entry, int sourceCol, int targetCol)
@@ -1679,6 +1773,7 @@ class TradeUIOverlay : EventHandler
 		pendingSourceColumn = sourceCol;
 		pendingTargetColumn = targetCol;
 		pendingItemClass = entry.cls;
+		pendingItemPrice = entry.price;
 
 		qtyDialog.Open(entry, entry.count, SCREEN_W, SCREEN_H);
 	}
@@ -1708,10 +1803,14 @@ class TradeUIOverlay : EventHandler
 		if (def == null)
 			return;
 
+		int finalPrice = pendingItemPrice;
+		if (finalPrice <= 0)
+			finalPrice = def.price;
+
 		TradeUIItemEntry moved = TradeTextUtil.MakeTradeEntry(
 			pendingItemClass,
 			amount,
-			def.price,
+			finalPrice,
 			def.icon
 		);
 
@@ -2670,6 +2769,7 @@ class TradeUIOverlay : EventHandler
 							pendingSourceColumn = dragSourceColumn;
 							pendingTargetColumn = targetCol;
 							pendingItemClass = entry.cls;
+							pendingItemPrice = entry.price;
 							ExecuteTransferAmount(1);
 							return;
 						}					}
