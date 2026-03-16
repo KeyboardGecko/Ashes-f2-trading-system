@@ -1596,8 +1596,7 @@ class TradeUIOverlay : EventHandler
 	Name pendingItemClass;
 
 	override void OnRegister()
-	{
-	
+	{	
 		UIScale = 4;
 		UI_VW = 610;
 		UI_VH = 250;
@@ -1661,6 +1660,7 @@ class TradeUIOverlay : EventHandler
 		InitializeButtons();
 		UpdateScreenLayout();
 	}
+
 
 	/// for dealing with quantities
 
@@ -1896,7 +1896,7 @@ class TradeUIOverlay : EventHandler
 		{
 			RebuildPlayerColumns(p.mo);
 		}
-
+	
 		RebuildTraderColumn();
 		SetVisible(true);
 	}
@@ -2911,9 +2911,9 @@ class TradeUIOverlay : EventHandler
 			DTA_ScaleY, 2
 		);
 	}
-	
-	ui void DrawBackgroundPanel(){
-	
+		
+	ui void DrawBackgroundPanel()
+	{
 		TextureID bg = TexMan.CheckForTexture("BGPANEL", TexMan.TYPE_Any);
 		if (bg.isValid())
 		{
