@@ -254,6 +254,40 @@ class TradeTextUtil : Object
 
 		return h;
 	}
+	
+	static Name RandomChoice(Array<Name> list)
+	{
+		if (list.Size() == 0)
+			return '';
+
+		return list[Random(0, list.Size() - 1)];
+	}
+	
+	// prooooobably should put these two into LANGUAGE lump
+	static Name NoMessages()
+	{
+		Array<Name> items;
+		items.Push('Sorry, no trade.');
+		items.Push('No.');
+		items.Push('Nope.');
+		items.Push('No money, no trade.');
+		items.Push('Are you trying to rip me off?');
+		items.Push('No, scav.');
+		items.Push('No deal.');
+		return items[Random(0, items.Size() - 1)];
+	}
+
+	static Name YesMessages()
+	{
+		Array<Name> items;
+		items.Push('Good trade.');
+		items.Push('Okay.');
+		items.Push('Fine.');
+		items.Push('Deal.');
+		items.Push('Deal. Anything else?');
+		items.Push('Pleasure doing business.');
+		return items[Random(0, items.Size() - 1)];
+	}
 }
 
 // ============================================================
@@ -2519,10 +2553,10 @@ class TradeUIOverlay : EventHandler
 	{
 		int sellTotal = sellColumn.GetTotalPrice();
 		int buyTotal = buyColumn.GetTotalPrice();
-
+			
 		if (buyTotal > sellTotal)
 		{
-			infoMessage = "Sorry, no trade.";
+			infoMessage = TradeTextUtil.NoMessages();
 			return;
 		}
 
@@ -2562,7 +2596,7 @@ class TradeUIOverlay : EventHandler
 			nstate.SetLiveTraderStock(currentTraderKey, traderStock);
 		}
 
-		infoMessage = "Good trade.";
+		infoMessage = TradeTextUtil.YesMessages();
 	}
 	
 	void CancelTrade()
