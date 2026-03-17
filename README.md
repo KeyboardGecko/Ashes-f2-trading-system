@@ -23,6 +23,9 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 		policepistol | Police Pistol | Standard sidearm. | 120 | 590GA0
 		chips | Chips | Trade currency. | 1 | SEL1D0
 		batteryreload | Batteries | A small power source for various devices. | 10 | IBTYA0
+		foodtin1 | Food | This could be tasty. Or edible. | 5 | BON1A0
+		firstaid | First aid kit | This might come in handy if you're bleeding. | 10 | INVMA0
+		pipebomb | Pipebomb | A long, cold cylinder with explosive contents. | 10 | ROCKA0
 	 
  2. Describe shops in TRADERS lump, like this:
 
@@ -37,22 +40,19 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 		trader Vance
 		{
 			policepistol, 1, 99 // look, custom price!
-			ninemilammo, 20
-			shotgunammo, 10
 			chips, 250
-			FoodTin1, 6
+			foodtin1, 6
 		}
 		
 		trader Jimmy, 1.2 // all prices are 20% higher, cause <greed_modifier> is 1.2
 		{
 			chips, 160
-			XBowAmmo, 32
 			batteryreload, 30
 			firstaid, 4
 			policepistol, 1, 111 // custom price again
-			pipebomb, 2
-			thumperammo, 1, 99 // and again
+			pipebomb, 2,  15 // and again
 		}
+
  3. In your conversations, put `[trade <unique_shop_key>]` into your character's reply where you want to start trading.
 	
  for example:
