@@ -27,7 +27,7 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 		firstaid | First aid kit | This might come in handy if you're bleeding. | 10 | INVMA0
 		pipebomb | Pipebomb | A long, cold cylinder with explosive contents. | 10 | ROCKA0
 	 
- 2. Describe shops in TRADERS lump, like this:
+ 2. Describe shops in TRADERS lump like this:
 
 		trader <unique_shop_key>, <greed_modifier(optional)>
 		{
