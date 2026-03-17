@@ -17,11 +17,11 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 	cls | name | description | price | icon
  
  for example:
+		 
+		policepistol | Police Pistol | Standard sidearm. | 120 | 590GA0
+		chips | Chips | Trade currency. | 1 | SEL1D0
+		batteryreload | Batteries | A small power source for various devices. | 10 | IBTYA0
 	 
-	policepistol | Police Pistol | Standard sidearm. | 120 | 590GA0
-	chips | Chips | Trade currency. | 1 | SEL1D0
-	batteryreload | Batteries | A small power source for various devices. | 10 | IBTYA0
- 
  2. describe shops in TRADERS lump, like this:
 		trader <unique_shop_key>, <greed_modifier(optional)>
 		{
@@ -30,6 +30,7 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 		}
  
  for example:
+
 		trader Vance
 		{
 			policepistol, 1, 99 // look, custom price!
@@ -38,7 +39,7 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 			chips, 250
 			FoodTin1, 6
 		}
-
+		
 		trader Jimmy, 1.2 // all prices are 20% higher, cause <greed_modifier> is 1.2
 		{
 			chips, 160
