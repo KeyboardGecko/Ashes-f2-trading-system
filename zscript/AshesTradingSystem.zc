@@ -354,7 +354,7 @@ class TradeDrawUtil : Object
 
 class TradeConfig : Object // global vendor price multiplier.
 {
-	const double GLOBAL_PRICE_MULT = 1.0;
+	double GLOBAL_PRICE_MULT = 1.0;
 }
 
 class TraderStockDef : Object
@@ -707,7 +707,7 @@ class TraderStateHandler : EventHandler
 		outItems.Clear();
 		EnsureInitialized();
 
-		Console.Printf("BuildTraderStock key=%s liveDefs=%d", key, liveDefs.Size());
+// 		Console.Printf("BuildTraderStock key=%s liveDefs=%d", key, liveDefs.Size());
 
 		let trader = FindDef(key);
 		if (trader == null || owner == null)
