@@ -2552,6 +2552,12 @@ class TradeUIOverlay : EventHandler
 
 	void PerformTrade()
 	{
+		if (sellColumn.entries.Size() == 0 && buyColumn.entries.Size() == 0)
+		{
+			infoMessage = "";
+			return;
+		}
+		
 		int sellTotal = sellColumn.GetTotalPrice();
 		int buyTotal = buyColumn.GetTotalPrice();
 			
@@ -2602,6 +2608,12 @@ class TradeUIOverlay : EventHandler
 	
 	void CancelTrade()
 	{
+		if (sellColumn.entries.Size() == 0 && buyColumn.entries.Size() == 0)
+		{
+			infoMessage = "";
+			return;
+		}
+	
 		selectedItemIndex = -1;
 		draggingItem = false;
 		selectedItemClass = '';
