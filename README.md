@@ -14,8 +14,9 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 
 ## How to use:
  1. Describe all tradeable items in TRADEITEMS lump like this:
-	cls | name | description | price | icon
- 
+
+		cls | name | description | price | icon
+
  for example:
 		 
 		policepistol | Police Pistol | Standard sidearm. | 120 | 590GA0
@@ -23,12 +24,13 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 		batteryreload | Batteries | A small power source for various devices. | 10 | IBTYA0
 	 
  2. describe shops in TRADERS lump, like this:
+
 		trader <unique_shop_key>, <greed_modifier(optional)>
 		{
 		 <item1_cls>, <amount>, <custom_price(optional)>
 		 <item2_cls>, <amount> 
 		}
- 
+
  for example:
 
 		trader Vance
