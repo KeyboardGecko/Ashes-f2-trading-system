@@ -7,7 +7,7 @@ A trading system just like in fallout 2? IN MY ASHES?!
 ## To implement it into your project
 
  1. Put everything from the `GameInfo` section into the `GameInfo` section of your mod's `MAPINFO` lump.
- 2. Put ```#include "zscript/AshesTradingSystem.zc"``` into `ZSCRIPT.ZC`. Don't forget to put `AshesTradingSystem.zc` `into zscript/`-folder of your mod.
+ 2. Put ```#include "zscript/AshesTradingSystem.zc"``` into `ZSCRIPT.ZC`. Don't forget to put `AshesTradingSystem.zc` into `zscript/` folder of your mod.
  3. Put everything that's left from every folder into the corresponding folder of your mod.
  
 OR just use mod launcher and launch this archive as a .pk3 with your mod.
