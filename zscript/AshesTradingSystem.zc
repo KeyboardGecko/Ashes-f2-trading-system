@@ -352,6 +352,11 @@ class TradeDrawUtil : Object
 //  Classes for traders
 // ============================================================
 
+class TradeConfig : Object // global vendor price multiplier.
+{
+	const double GLOBAL_PRICE_MULT = 1.0;
+}
+
 class TraderStockDef : Object
 {
 	String traderKey;
@@ -727,7 +732,8 @@ class TraderStateHandler : EventHandler
 			int finalPrice = src.price;
 			if (finalPrice <= 0)
 			{
-				finalPrice = int(itemDef.price * trader.priceMultiplier + 0.5);
+				finalPrice = int(itemDef.price * TradeConfig.GLOBAL_PRICE_MULT * trader.priceMultiplier + 0.5);
+
 				if (finalPrice <= 0)
 					finalPrice = 1;
 			}
