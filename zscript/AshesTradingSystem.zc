@@ -354,7 +354,7 @@ class TradeDrawUtil : Object
 
 class TradeConfig : Object // global vendor price multiplier.
 {
-	double GLOBAL_PRICE_MULT = 1.0;
+	const GLOBAL_PRICE_MULT = 1.0;
 }
 
 class TraderStockDef : Object
