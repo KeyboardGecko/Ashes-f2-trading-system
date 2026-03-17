@@ -60,6 +60,8 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
  
  The `"[-]"` tag is not displayed by the dialog - you'll see only `"Let me see what you have.".`
  Choosing this reply will forcefully interrupt the coversation and open trade interface, loading "Vance" shop.
+
+There's a global vendor price modifier in `AshesTradingSystem.zc`: GLOBAL_PRICE_MULT = 1. Change it if you want to make all vendors greedy.
  
 Refer to TRADERS and TRADEITEMS lumps for detailed information.
 
