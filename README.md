@@ -2,12 +2,13 @@
 
 A trading system just like in fallout 2? IN MY ASHES?!
 
+![Trading interface](trading-ui.png)
 
 ## To implement it into your project
 
  1. Put everything from the `GameInfo` section into the `GameInfo` section of your mod's `MAPINFO` lump.
- 2. Put ```#include "zscript/AshesTradingSystem.zc"``` into `ZSCRIPT.ZC`:
- 3. put everything that's left from every folder into the corresponding folder of your mod.
+ 2. Put ```#include "zscript/AshesTradingSystem.zc"``` into `ZSCRIPT.ZC`. Don't forget to put `AshesTradingSystem.zc` `into zscript/`-folder of your mod.
+ 3. Put everything that's left from every folder into the corresponding folder of your mod.
  
 OR just use mod launcher and launch this archive as a .pk3 with your mod.
 
@@ -23,7 +24,7 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 		chips | Chips | Trade currency. | 1 | SEL1D0
 		batteryreload | Batteries | A small power source for various devices. | 10 | IBTYA0
 	 
- 2. describe shops in TRADERS lump, like this:
+ 2. Describe shops in TRADERS lump, like this:
 
 		trader <unique_shop_key>, <greed_modifier(optional)>
 		{
