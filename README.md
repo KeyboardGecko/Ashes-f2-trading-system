@@ -53,12 +53,12 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 			pipebomb, 2
 			thumperammo, 1, 99 // and again
 		}
- 3. In your conversations, put [trade <unique_shop_key>] into your character's reply where you want to start trading.
+ 3. In your conversations, put `[trade <unique_shop_key>]` into your character's reply where you want to start trading.
 	
  for example:
-	in LANGUAGE lump - TXT_WALKER_207 = "Let me see what you have. [trade Vance]";
+	in LANGUAGE lump - `TXT_WALKER_207 = "Let me see what you have. [trade Vance]";`
  
- The "[-]" tag is not displayed by the dialog - you'll see only "Let me see what you have.".
+ The `"[-]"` tag is not displayed by the dialog - you'll see only `"Let me see what you have.".`
  Choosing this reply will forcefully interrupt the coversation and open trade interface, loading "Vance" shop.
  
 Refer to TRADERS and TRADEITEMS lumps for detailed information.
