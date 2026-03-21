@@ -827,7 +827,7 @@ class TradeUIButton : Object
 	bool active;
 	
 	Name actionEvent;
-	Name clickSound;
+	String clickSound;
 
 	bool visible;
 	bool enabled;
@@ -848,7 +848,7 @@ class TradeUIButton : Object
 		active = false;
 		
 		actionEvent = '';
-		clickSound = '';
+		clickSound = "ui/click";
 	}
 
 	void SetPos(int px, int py)
@@ -903,9 +903,17 @@ class TradeUIButton : Object
 		actionEvent = evt;
 	}
 
-	void SetClickSound(Name snd)
+	void PlayClickSound()
 	{
-		clickSound = snd;
+		if (clickSound == "")
+			return;
+
+		let p = players[consoleplayer];
+		if (p == null || p.mo == null)
+			return;
+		
+		Console.printf("here - %s", clickSound);
+		p.mo.A_StartSound(clickSound, CHAN_AUTO, CHANF_UI);
 	}
 
 	void SetHoverMessage(String msg)
@@ -966,6 +974,9 @@ class TradeUIButton : Object
 	{
 		if (!visible || !enabled)
 			return false;
+
+
+		PlayClickSound();
 
 		if (actionEvent != '')
 		{
