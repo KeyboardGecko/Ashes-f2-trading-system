@@ -4,22 +4,24 @@
 // ...
 // Unless you want to, of course.
 // the format is self-explanatory, but still -
-// cls | name | description | price | icon
+// cls | name | description | price | icon | type
+// type is "misc" by default. Can be whatever you want - weapon, ammo, etc.
+// used in filters while trading.
 
-policepistol | Police Pistol | Standard sidearm. | 120 | 590GA0
+policepistol | Police Pistol | Standard sidearm. | 120 | 590GA0 | weapon
 chips | Chips | Trade currency. | 1 | SEL1D0
 batteryreload | Batteries | A small power source for various devices. | 10 | IBTYA0
-ninemilammo | 9mm Ammo | Ammo for 9mm weapons. | 2 | CLIPA0
-shotgunammo | Shotgun Ammo | Shells for shotguns. | 4 | SBOXA0
-XBowAmmo | X-Bow Ammo | Arrows or bolts. | 6 | CELLA0
-leveraction | Lever-action shotgun | Your personal handgun. | 250 | GRIGA0
-XBOW | X-Bow | A metallic crossbow. Pretty heavy. | 250 | XBWPA0
-XBow3 | Double X-Bow | Enhanced metallic crossbow. Holds 2 arrows. | 350 | XBWPB0
-XBow5 | Power Boltcaster | This double-shot crossbow fires bolts so hard there's no point in retrieving them. | 550 | XBWPC0
-rifleAmmo | Rifle ammo | 5.56 Ammo. | 5 | LOOSA0
+ninemilammo | 9mm Ammo | Ammo for 9mm weapons. | 2 | CLIPA0 | ammo
+shotgunammo | Shotgun Ammo | Shells for shotguns. | 4 | SBOXA0 | ammo
+XBowAmmo | X-Bow Ammo | Arrows or bolts. | 6 | CELLA0 | ammo
+leveraction | Lever-action shotgun | Your personal handgun. | 250 | GRIGA0 | weapon
+XBOW | X-Bow | A metallic crossbow. Pretty heavy. | 250 | XBWPA0 | weapon
+XBow3 | Double X-Bow | Enhanced metallic crossbow. Holds 2 arrows. | 350 | XBWPB0 | weapon
+XBow5 | Power Boltcaster | This double-shot crossbow fires bolts so hard there's no point in retrieving them. | 550 | XBWPC0 | weapon
+rifleAmmo | Rifle ammo | 5.56 Ammo. | 5 | LOOSA0 | ammo
 pipebomb | Pipebomb | A long, cold cylinder with explosive contents. | 10 | ROCKA0
-firstaid | First aid kit | This might come in handy if you're bleeding. | 10 | INVMA0
-ThumperAmmo | Thumper Ammo | Those thumping things for thumper. | 10 | 40MMA0
-Thumper | Thumper | Thumper be thumpin. | 600 | GRIGA0
-FoodTin1 | Food | This could be tasty. Or edible. | 5 | BON1A0
+firstaid | First aid kit | This might come in handy if you're bleeding. | 10 | INVMA0 | health
+ThumperAmmo | Thumper Ammo | Those thumping things for thumper. | 10 | 40MMA0 | ammo
+Thumper | Thumper | Thumper be thumpin. | 600 | GRIGA0 | weapon
+FoodTin1 | Food | This could be tasty. Or edible. | 5 | BON1A0 | health
 
