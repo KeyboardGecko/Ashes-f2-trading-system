@@ -254,15 +254,7 @@ class TradeTextUtil : Object
 
 		return h;
 	}
-	
-	static Name RandomChoice(Array<Name> list)
-	{
-		if (list.Size() == 0)
-			return '';
 
-		return list[Random(0, list.Size() - 1)];
-	}
-	
 	// prooooobably should put these two into LANGUAGE lump
 	static Name NoMessages()
 	{
@@ -845,7 +837,6 @@ class TradeUIButton : Object
 	int arg3;
 
 	Name actionEvent;
-	String clickSound;
 
 	bool visible;
 	bool enabled;
@@ -871,7 +862,6 @@ class TradeUIButton : Object
 		actionEvent = '';
 		hoverMessage = "";
 		buttonName = "";
-		clickSound = "btndn";
 
 		icon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
 	}
@@ -942,11 +932,6 @@ class TradeUIButton : Object
 		actionEvent = evt;
 	}
 
-	void SetClickSound(String snd)
-	{
-		clickSound = snd;
-	}
-
 	void SetHoverMessage(String msg)
 	{
 		hoverMessage = msg;
@@ -964,18 +949,6 @@ class TradeUIButton : Object
 
 		return mx >= x && mx <= x + w &&
 			   my >= y && my <= y + h;
-	}
-
-	void PlayClickSound()
-	{
-		if (clickSound == "")
-			return;
-
-		let p = players[consoleplayer];
-		if (p == null || p.mo == null)
-			return;
-
-		p.mo.A_StartSound(clickSound, CHAN_AUTO, CHANF_UI);
 	}
 
 	ui TextureID ResolveDrawIcon(bool pressed, bool drawAsActive)
@@ -1237,18 +1210,6 @@ class TradeItemColumn : Object
 		entries.Push(copy);
 	}
 
-	void RemoveItemByClass(Name cls)
-	{
-		for (int i = 0; i < entries.Size(); i++)
-		{
-			if (entries[i].cls == cls)
-			{
-				entries.Delete(i);
-				return;
-			}
-		}
-	}
-
 	bool IsInside(int mx, int my)
 	{
 		double listHeight = (maxVisible - 1) * slotStep + slotSize;
@@ -1257,15 +1218,6 @@ class TradeItemColumn : Object
 			   my >= y && my <= y + listHeight;
 	}
 
-	bool HasItem(Name cls)
-	{
-		for (int i = 0; i < entries.Size(); i++)
-		{
-			if (entries[i].cls == cls)
-				return true;
-		}
-		return false;
-	}
 
 	int GetTotalPrice()
 	{
@@ -1567,15 +1519,6 @@ class TradeQuantityDialog : Object
 
 	// helpers
 	
-	void ClampQuantity()
-	{
-		if (quantity < 1)
-			quantity = 1;
-
-		if (quantity > maxQuantity)
-			quantity = maxQuantity;
-	}
-
 	void RebuildQuantityFromTyped()
 	{
 		if (typedQuantity == "")
@@ -1629,13 +1572,6 @@ class TradeQuantityDialog : Object
 		RebuildQuantityFromTyped();
 	}
 
-	bool IsInside(int mx, int my)
-	{
-		return visible &&
-			   mx >= x && mx <= x + w &&
-			   my >= y && my <= y + h;
-	}
-
 	void AddOne()
 	{
 		typedQuantity = "";
@@ -1658,13 +1594,23 @@ class TradeQuantityDialog : Object
 		quantity = maxQuantity;
 	}
 
-	ui void DrawButton(TradeUIButton btn, int mx, int my, bool held, bool active = false)
+	ui void DrawButton(TradeUIButton btn, bool active = false)
 	{
 		if (btn == null)
 			return;
 
-		bool hov = btn.IsInside(mx, my);
-		btn.Draw(hov, hov && held, active);
+		let overlay = TradeUIOverlay.Get();
+
+		bool hov = false;
+		bool pressed = false;
+
+		if (overlay != null)
+		{
+			hov = btn.IsInside(overlay.cursor.x, overlay.cursor.y);
+			pressed = overlay.pressedButton == btn && overlay.lmbHeld;
+		}
+
+		btn.Draw(hov, pressed, active);
 	}
 
 	void Layout(int screenW, int screenH)
@@ -1684,7 +1630,7 @@ class TradeQuantityDialog : Object
 		cancelButton.SetPos(x + iconBox * 1.9 + plusButton.w, y + plusButton.h * 4.2 + 30);
 	}
 
-	ui void Draw(int mx, int my, bool lmbHeld)
+	ui void Draw()
 	{
 		if (!visible)
 			return;
@@ -1710,7 +1656,7 @@ class TradeQuantityDialog : Object
 				DTA_TopLeft, true
 			);
 		}
-		if (whiteTex.isValid())
+		if (bg.isValid())
 		{
 			Screen.DrawTexture(bg, false, x, y,
 				DTA_DestWidth, w,
@@ -1746,12 +1692,12 @@ class TradeQuantityDialog : Object
 			DTA_ScaleX, textScale,
 			DTA_ScaleY, textScale
 		);
-		
-		DrawButton(minusButton, mx, my, lmbHeld);
-		DrawButton(plusButton, mx, my, lmbHeld);
-		DrawButton(allButton, mx, my, lmbHeld);
-		DrawButton(okButton, mx, my, lmbHeld);
-		DrawButton(cancelButton, mx, my, lmbHeld);
+				
+		DrawButton(minusButton);
+		DrawButton(plusButton);
+		DrawButton(allButton);
+		DrawButton(okButton);
+		DrawButton(cancelButton);
 	}
 }
 
@@ -1803,10 +1749,11 @@ class TradeUIOverlay : EventHandler
 	TradeItemColumn buyColumn;
 	TradeItemColumn traderColumn;
 
+	TradeUIButton pressedButton;
+
 	Array<TradeUIItemEntry> traderStock;
 	Array<TradeItemDef> tradeWhitelist;
 
-	Actor currentConversationNPC;
 	String currentTraderKey;
 	
 	int dragSourceColumn;
@@ -1881,6 +1828,7 @@ class TradeUIOverlay : EventHandler
 		pendingItemPrice = 0;
 
 		lmbHeld = false;
+		pressedButton = null;
 		
 		LoadTradeWhitelistFromLump();
 		
@@ -1924,7 +1872,8 @@ class TradeUIOverlay : EventHandler
 	{
 		qtyDialog.Close();
 		ClearPendingTransfer();
-
+		pressedButton = null;
+		
 		selectedItemIndex = -1;
 		draggingItem = false;
 		dragSourceColumn = COL_NONE;
@@ -1990,21 +1939,7 @@ class TradeUIOverlay : EventHandler
 		selectedItemClass = '';
 		cursor.ClearIcon();
 	}
-		
-	bool ProcessQuantityDialogButtons()
-	{
-		if (!qtyDialog.visible)
-			return false;
-
-		if (ProcessButtonClick(qtyDialog.minusButton)) return true;
-		if (ProcessButtonClick(qtyDialog.plusButton)) return true;
-		if (ProcessButtonClick(qtyDialog.allButton)) return true;
-		if (ProcessButtonClick(qtyDialog.okButton)) return true;
-		if (ProcessButtonClick(qtyDialog.cancelButton)) return true;
-
-		return false;
-	}
-	
+			
 	/////
 			
 	void AddTradeWhitelistItem(Name cls, String displayName, String description, int price, String iconName, Name itemType = 'misc')
@@ -2195,8 +2130,6 @@ class TradeUIOverlay : EventHandler
 		traderStock.Clear();
 		
 		currentTraderKey = traderKey;
-
-// 		Console.Printf("OpenForTraderKey: %s", traderKey);
 				
 		let nstate = TraderStateHandler.Get();
 		if (nstate != null)
@@ -2207,8 +2140,6 @@ class TradeUIOverlay : EventHandler
 		{
 			Console.Printf("OpenForTraderKey: TraderStateHandler is null");
 		}
-
-// 		Console.Printf("OpenForTraderKey: traderStock=%d", traderStock.Size());
 
 		let p = players[consoleplayer];
 		if (p && p.mo)
@@ -2237,8 +2168,100 @@ class TradeUIOverlay : EventHandler
 
 		OpenForTraderKey(npc.GetClassName());
 	}
+
+	bool ReleasePressedButton()
+	{
+		if (pressedButton == null)
+			return false;
+
+		let hovered = GetHoveredButton();
+		let btn = pressedButton;
+		pressedButton = null;
+
+		if (hovered != btn)
+			return false;
+
+		btn.Activate(self);
+		TradeTextUtil.playSound('btnup');
+		return true;
+	}
 	
-	
+	TradeUIButton GetHoveredButton()
+	{
+		if (qtyDialog.visible)
+		{
+			if (qtyDialog.minusButton != null && qtyDialog.minusButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.minusButton;
+
+			if (qtyDialog.plusButton != null && qtyDialog.plusButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.plusButton;
+
+			if (qtyDialog.allButton != null && qtyDialog.allButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.allButton;
+
+			if (qtyDialog.okButton != null && qtyDialog.okButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.okButton;
+
+			if (qtyDialog.cancelButton != null && qtyDialog.cancelButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.cancelButton;
+
+			return null;
+		}
+
+		for (int i = 0; i < mainButtons.Size(); i++)
+		{
+			let btn = mainButtons[i];
+			if (btn != null && btn.IsInside(cursor.x, cursor.y))
+				return btn;
+		}
+
+		if (inventoryFilterButton != null && inventoryFilterButton.IsInside(cursor.x, cursor.y))
+			return inventoryFilterButton;
+
+		if (traderFilterButton != null && traderFilterButton.IsInside(cursor.x, cursor.y))
+			return traderFilterButton;
+
+		return null;
+	}
+
+	ui TradeUIButton GetHoveredButtonUI()
+	{ // I HATE THIS SHIT
+		if (qtyDialog.visible)
+		{
+			if (qtyDialog.minusButton != null && qtyDialog.minusButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.minusButton;
+
+			if (qtyDialog.plusButton != null && qtyDialog.plusButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.plusButton;
+
+			if (qtyDialog.allButton != null && qtyDialog.allButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.allButton;
+
+			if (qtyDialog.okButton != null && qtyDialog.okButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.okButton;
+
+			if (qtyDialog.cancelButton != null && qtyDialog.cancelButton.IsInside(cursor.x, cursor.y))
+				return qtyDialog.cancelButton;
+
+			return null;
+		}
+
+		for (int i = 0; i < mainButtons.Size(); i++)
+		{
+			let btn = mainButtons[i];
+			if (btn != null && btn.IsInside(cursor.x, cursor.y))
+				return btn;
+		}
+
+		if (inventoryFilterButton != null && inventoryFilterButton.IsInside(cursor.x, cursor.y))
+			return inventoryFilterButton;
+
+		if (traderFilterButton != null && traderFilterButton.IsInside(cursor.x, cursor.y))
+			return traderFilterButton;
+
+		return null;
+	}
+
 	TradeUIButton makeNewButton(
 		int w, 
 		int h, 
@@ -2346,34 +2369,11 @@ class TradeUIOverlay : EventHandler
 
 	ui String GetHoveredButtonMessage()
 	{
-		if (qtyDialog.visible)
-		{
-			if (qtyDialog.minusButton != null && qtyDialog.minusButton.IsInside(cursor.x, cursor.y))
-				return qtyDialog.minusButton.GetHoverMessage();
-
-			if (qtyDialog.plusButton != null && qtyDialog.plusButton.IsInside(cursor.x, cursor.y))
-				return qtyDialog.plusButton.GetHoverMessage();
-
-			if (qtyDialog.allButton != null && qtyDialog.allButton.IsInside(cursor.x, cursor.y))
-				return qtyDialog.allButton.GetHoverMessage();
-
-			if (qtyDialog.okButton != null && qtyDialog.okButton.IsInside(cursor.x, cursor.y))
-				return qtyDialog.okButton.GetHoverMessage();
-
-			if (qtyDialog.cancelButton != null && qtyDialog.cancelButton.IsInside(cursor.x, cursor.y))
-				return qtyDialog.cancelButton.GetHoverMessage();
-
+		let btn = GetHoveredButtonUI();
+		if (btn == null)
 			return "";
-		}
-		
-		for (int i = 0; i < mainButtons.Size(); i++) {
-			if (mainButtons[i].IsInside(cursor.x, cursor.y)) return mainButtons[i].GetHoverMessage();
-		}
 
-		if (inventoryFilterButton.IsInside(cursor.x, cursor.y)) return inventoryFilterButton.GetHoverMessage();
-		if (traderFilterButton.IsInside(cursor.x, cursor.y)) return traderFilterButton.GetHoverMessage();
-
-		return "";
+		return btn.GetHoverMessage();
 	}
 
 	ui String GetFirstHoveredDescription()
@@ -2431,7 +2431,7 @@ class TradeUIOverlay : EventHandler
 
 	clearscope static TradeUIOverlay Get()
 	{
-		return TradeUIOverlay(StaticEventHandler.Find('TradeUIOverlay'));
+		return TradeUIOverlay(EventHandler.Find('TradeUIOverlay'));
 	}
 
 	void SetVisible(bool on)
@@ -2440,7 +2440,8 @@ class TradeUIOverlay : EventHandler
 		IsUiProcessor = on;
 		RequireMouse = on;
 		cursor.SetVisible(on);
-
+		pressedButton = null;
+		
 		if (!on)
 		{
 			selectedItemIndex = -1;
@@ -2947,30 +2948,6 @@ class TradeUIOverlay : EventHandler
 	}
 ///////////////////////
 
-	bool ProcessButtonArray(Array<TradeUIButton> buttons)
-	{
-		for (int i = 0; i < buttons.Size(); i++)
-		{
-			if (ProcessButtonClick(buttons[i]))
-				return true;
-		}
-		return false;
-	}
-
-	bool ProcessButtons()
-	{
-		if (qtyDialog.visible)
-			return ProcessQuantityDialogButtons();
-
-		if (ProcessButtonArray(mainButtons))
-			return true;
-
-		if (ProcessButtonClick(inventoryFilterButton)) return true;
-		if (ProcessButtonClick(traderFilterButton)) return true;
-
-		return false;
-	}
-
 	override void WorldTick()
 	{
 		let p = players[consoleplayer];
@@ -3030,7 +3007,7 @@ class TradeUIOverlay : EventHandler
 
 		if (e.Name == "close_tradeui")
 		{
-			SetVisible(false);
+			CloseTrade();
 			return;
 		}
 		
@@ -3048,7 +3025,6 @@ class TradeUIOverlay : EventHandler
 				String key = reg.FindKeyByNetId(e.Args[0]);
 				if (key != "")
 				{
-// 					Console.Printf("Opening trader by id: %d -> %s", e.Args[0], key);
 					OpenForTraderKey(key);
 				}
 				else
@@ -3111,7 +3087,8 @@ class TradeUIOverlay : EventHandler
 				if (lmbHeld)
 				{
 					lmbHeld = false;
-					ProcessQuantityDialogButtons();
+					if (ReleasePressedButton())
+						return;
 				}
 				return;
 			}
@@ -3168,7 +3145,7 @@ class TradeUIOverlay : EventHandler
 			if (lmbHeld)
 			{
 				lmbHeld = false;
-				if (ProcessButtons()) 
+				if (ReleasePressedButton())
 				{
 					return;
 				}
@@ -3184,13 +3161,33 @@ class TradeUIOverlay : EventHandler
 			int vx = e.Args[0];
 			int vy = e.Args[1];
 
+			cursor.SetPos(vx, vy);
+
+			if (qtyDialog.visible)
+			{
+				pressedButton = GetHoveredButton();
+				if (pressedButton != null)
+				{
+					TradeTextUtil.playSound('btndn');
+					return;
+				}
+				return;
+			}
+
 			if (TryStartDragFromColumn(inventoryColumn, COL_INV, vx, vy)) return;
 			if (TryStartDragFromColumn(sellColumn, COL_SELL, vx, vy)) return;
 			if (TryStartDragFromColumn(buyColumn, COL_BUY, vx, vy)) return;
 			if (TryStartDragFromColumn(traderColumn, COL_TRADER, vx, vy)) return;
 
+			pressedButton = GetHoveredButton();
+			if (pressedButton != null)
+			{
+				TradeTextUtil.playSound('btndn');
+				return;
+			}
+
 			return;
-		}
+		}		
 		
 		if (e.Name == "qty_plus")
 		{
@@ -3259,21 +3256,6 @@ class TradeUIOverlay : EventHandler
 			infoMessage = "";
 			return;
 		}	
-	}
-
-	bool ProcessButtonClick(TradeUIButton button)
-	{
-		if (button == null)
-			return false;
-
-		if (button.IsInside(cursor.x, cursor.y))
-		{
-			button.Activate(self);
-			TradeTextUtil.playSound('btndn');
-			return true;
-		}
-
-		return false;
 	}
 
 	override bool UiProcess(UiEvent e)
@@ -3451,14 +3433,11 @@ class TradeUIOverlay : EventHandler
 		if (btn == null)
 			return;
 
-		bool hov = false;
+		bool hov = btn.IsInside(cursor.x, cursor.y);
 		bool pressed = false;
 
-		if (!qtyDialog.visible)
-		{
-			hov = btn.IsInside(cursor.x, cursor.y);
-			pressed = hov && lmbHeld;
-		}
+		if (pressedButton != null)
+			pressed = pressedButton == btn && lmbHeld;
 
 		btn.Draw(hov, pressed, active);
 	}
@@ -3553,7 +3532,7 @@ class TradeUIOverlay : EventHandler
 
 		if (qtyDialog.visible)
 		{
-			qtyDialog.Draw(cursor.x, cursor.y, lmbHeld);
+			qtyDialog.Draw();
 		}
 		
 		cursor.Draw();
