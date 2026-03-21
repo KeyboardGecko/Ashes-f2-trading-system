@@ -289,6 +289,18 @@ class TradeTextUtil : Object
 		items.Push('Pleasure doing business.');
 		return items[Random(0, items.Size() - 1)];
 	}
+	
+	static void playSound(String soundName)
+	{
+		if (soundName == "")
+			return;
+
+		let p = players[consoleplayer];
+		if (p == null || p.mo == null)
+			return;
+
+		p.mo.A_StartSound(soundName, CHAN_AUTO, CHANF_UI);
+	}
 }
 
 // ============================================================
@@ -824,8 +836,14 @@ class TradeUIButton : Object
 
 	TextureID icon;
 	TextureID activeIcon;
-	bool active;
-	
+	TextureID iconPressed;
+
+	bool hasArgs;
+
+	int arg1;
+	int arg2;
+	int arg3;
+
 	Name actionEvent;
 	String clickSound;
 
@@ -833,6 +851,7 @@ class TradeUIButton : Object
 	bool enabled;
 
 	String hoverMessage;
+	String buttonName;
 
 	void Init(int px, int py, int pw, int ph)
 	{
@@ -843,12 +862,36 @@ class TradeUIButton : Object
 
 		visible = true;
 		enabled = true;
+		hasArgs = false;
+
+		arg1 = 0;
+		arg2 = 0;
+		arg3 = 0;
+
+		actionEvent = '';
+		hoverMessage = "";
+		buttonName = "";
+		clickSound = "btndn";
 
 		icon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
-		active = false;
-		
-		actionEvent = '';
-		clickSound = "ui/click";
+	}
+
+	void SetArgs(int narg1 = 0, int narg2 = 0, int narg3 = 0)
+	{
+		hasArgs = true;
+		arg1 = narg1;
+		arg2 = narg2;
+		arg3 = narg3;
+	}
+
+	void SetName(String bname)
+	{
+		buttonName = bname;
+	}
+
+	String GetName()
+	{
+		return buttonName;
 	}
 
 	void SetPos(int px, int py)
@@ -873,12 +916,6 @@ class TradeUIButton : Object
 		enabled = on;
 	}
 
-	void SetIcon(TextureID tex)
-	{
-		if (tex.isValid())
-			icon = tex;
-	}
-
 	void SetDefaultIcon(String texName)
 	{
 		TextureID tex = TexMan.CheckForTexture(texName, TexMan.TYPE_Any);
@@ -893,9 +930,11 @@ class TradeUIButton : Object
 			activeIcon = tex;
 	}
 
-	void SetActive(bool on)
+	void SetPressedIcon(String texName)
 	{
-		active = on;
+		TextureID tex = TexMan.CheckForTexture(texName, TexMan.TYPE_Any);
+		if (tex.isValid())
+			iconPressed = tex;
 	}
 
 	void SetAction(Name evt)
@@ -903,17 +942,9 @@ class TradeUIButton : Object
 		actionEvent = evt;
 	}
 
-	void PlayClickSound()
+	void SetClickSound(String snd)
 	{
-		if (clickSound == "")
-			return;
-
-		let p = players[consoleplayer];
-		if (p == null || p.mo == null)
-			return;
-		
-		Console.printf("here - %s", clickSound);
-		p.mo.A_StartSound(clickSound, CHAN_AUTO, CHANF_UI);
+		clickSound = snd;
 	}
 
 	void SetHoverMessage(String msg)
@@ -926,7 +957,6 @@ class TradeUIButton : Object
 		return hoverMessage;
 	}
 
-
 	bool IsInside(int mx, int my)
 	{
 		if (!visible || !enabled)
@@ -936,7 +966,30 @@ class TradeUIButton : Object
 			   my >= y && my <= y + h;
 	}
 
-	ui void Draw(bool hovered, bool pressed, bool active)
+	void PlayClickSound()
+	{
+		if (clickSound == "")
+			return;
+
+		let p = players[consoleplayer];
+		if (p == null || p.mo == null)
+			return;
+
+		p.mo.A_StartSound(clickSound, CHAN_AUTO, CHANF_UI);
+	}
+
+	ui TextureID ResolveDrawIcon(bool pressed, bool drawAsActive)
+	{
+		if (pressed && iconPressed.isValid())
+			return iconPressed;
+
+		if (drawAsActive && activeIcon.isValid())
+			return activeIcon;
+
+		return icon;
+	}
+
+	ui void Draw(bool hovered, bool pressed, bool drawAsActive)
 	{
 		if (!visible)
 			return;
@@ -949,7 +1002,7 @@ class TradeUIButton : Object
 		if (hovered)
 			bgAlpha = 0.20;
 
-		if (pressed)
+		if (pressed && !iconPressed.isValid())
 			bgAlpha = 0.30;
 
 		if (whiteTex.isValid())
@@ -962,9 +1015,7 @@ class TradeUIButton : Object
 			);
 		}
 
-		TextureID drawIcon = icon;
-		if (active && activeIcon.isValid())
-			drawIcon = activeIcon;
+		TextureID drawIcon = ResolveDrawIcon(pressed, drawAsActive);
 
 		if (drawIcon.isValid())
 			TradeDrawUtil.DrawTextureFitted(drawIcon, x, y, w, h, iconAlpha);
@@ -972,19 +1023,20 @@ class TradeUIButton : Object
 
 	bool Activate(TradeUIOverlay owner)
 	{
-		if (!visible || !enabled)
+		if (!visible || !enabled || owner == null)
 			return false;
 
+// 		PlayClickSound();
 
-		PlayClickSound();
+		if (actionEvent == '')
+			return false;
 
-		if (actionEvent != '')
-		{
+		if (hasArgs)
+			owner.SendNetworkEvent(actionEvent, arg1, arg2, arg3);
+		else
 			owner.SendNetworkEvent(actionEvent);
-			return true;
-		}
 
-		return false;
+		return true;
 	}
 }
 
@@ -1615,7 +1667,6 @@ class TradeQuantityDialog : Object
 		btn.Draw(hov, hov && held, active);
 	}
 
-
 	void Layout(int screenW, int screenH)
 	{
 		x = (screenW - w) / 2;
@@ -1717,19 +1768,9 @@ class TradeUIOverlay : EventHandler
 
 	bool visible;
 
-	TradeUIButton invUpButton;
-	TradeUIButton invDownButton;
-	TradeUIButton sellUpButton;
-	TradeUIButton sellDownButton;
-	TradeUIButton buyUpButton;
-	TradeUIButton buyDownButton;
-	TradeUIButton traderUpButton;
-	TradeUIButton traderDownButton;
-	TradeUIButton tradeButton;
-	TradeUIButton cancelButton;
+	Array<TradeUIButton> mainButtons;
 	TradeUIButton inventoryFilterButton;
 	TradeUIButton traderFilterButton;
-	TradeUIButton exitButton;
 
 	Array<Name> inventoryFilterTypes;
 	Array<Name> traderFilterTypes;
@@ -2198,79 +2239,73 @@ class TradeUIOverlay : EventHandler
 	}
 	
 	
+	TradeUIButton makeNewButton(
+		int w, 
+		int h, 
+		String defaultIcon, 
+		Name setAction, 
+		String hoverMessage, 
+		String buttonName)
+	{
+		TradeUIButton newButton = new("TradeUIButton");
+		newButton.Init(0, 0, int(w * UIScale), int(h * UIScale));
+		newButton.SetDefaultIcon(defaultIcon);
+		newButton.SetAction(setAction);
+		newButton.SetHoverMessage(hoverMessage);
+		newButton.SetName(buttonName);
+		
+		return newButton;
+	}
+
+	
+	TradeUIButton arrowUpButton(String buttonName, int columnId){
+		TradeUIButton btn = makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "arrowup", 'scroll_button', "Scroll up", buttonName);
+		btn.SetArgs(columnId, 0);
+		return btn;
+	}
+
+	TradeUIButton arrowDownButton(String buttonName, int columnId){
+		TradeUIButton btn =  makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "arrowdn", 'scroll_button', "Scroll down", buttonName);
+		btn.SetArgs(columnId, 1);
+		return btn;
+	}	
+
+	TradeUIButton filterButton(Name setAction, String buttonName){
+		TradeUIButton btn = makeNewButton(6, 6, "fltroff", setAction, "Filters", buttonName);
+		btn.SetActiveIcon("fltron");
+		return btn;
+	}	
+
+	TradeUIButton FindButtonByName(String buttonName, Array<TradeUIButton> buttons)
+	{
+		for (int i = 0; i < buttons.Size(); i++)
+		{
+			let btn = buttons[i];
+			if (btn != null && btn.GetName() == buttonName)
+				return btn;
+		}
+		return null;
+	}
+	
 	void InitializeButtons()
 	{
-		tradeButton = new("TradeUIButton");
-		tradeButton.Init(0, 0, int(20 * UIScale), int(10 * UIScale));
-		tradeButton.SetDefaultIcon("trade");
-		tradeButton.SetAction('do_trade');
-		tradeButton.SetHoverMessage("Trade");
-
-		cancelButton = new("TradeUIButton");
-		cancelButton.Init(0, 0, int(20 * UIScale), int(10 * UIScale));
-		cancelButton.SetDefaultIcon("tradeoff");
-		cancelButton.SetAction('cancel_trade');
-		cancelButton.SetHoverMessage("Clear");
-
-		invUpButton = new("TradeUIButton");
-		invUpButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
-		invUpButton.SetDefaultIcon("arrowup");
-		invUpButton.SetHoverMessage("Scroll up");
-
-		invDownButton = new("TradeUIButton");
-		invDownButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
-		invDownButton.SetDefaultIcon("arrowdn");
-		invDownButton.SetHoverMessage("Scroll down");
-
-		sellUpButton = new("TradeUIButton");
-		sellUpButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
-		sellUpButton.SetDefaultIcon("arrowup");
-		sellUpButton.SetHoverMessage("Scroll up");
-
-		sellDownButton = new("TradeUIButton");
-		sellDownButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
-		sellDownButton.SetDefaultIcon("arrowdn");
-		sellDownButton.SetHoverMessage("Scroll down");
-
-		buyUpButton = new("TradeUIButton");
-		buyUpButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
-		buyUpButton.SetDefaultIcon("arrowup");
-		buyUpButton.SetHoverMessage("Scroll up");
-
-		buyDownButton = new("TradeUIButton");
-		buyDownButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
-		buyDownButton.SetDefaultIcon("arrowdn");
-		buyDownButton.SetHoverMessage("Scroll down");
-
-		traderUpButton = new("TradeUIButton");
-		traderUpButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
-		traderUpButton.SetDefaultIcon("arrowup");
-		traderUpButton.SetHoverMessage("Scroll up");
-
-		traderDownButton = new("TradeUIButton");
-		traderDownButton.Init(0, 0, SLOT_SIZE / 2, SLOT_SIZE / 4);
-		traderDownButton.SetDefaultIcon("arrowdn");
-		traderDownButton.SetHoverMessage("Scroll down");
-				
-		inventoryFilterButton = new("TradeUIButton");
-		inventoryFilterButton.Init(0, 0, int(6 * UIScale), int(6 * UIScale));
-		inventoryFilterButton.SetDefaultIcon("fltroff");
-		inventoryFilterButton.SetActiveIcon("fltron");
-		inventoryFilterButton.SetAction('cycle_inv_filter');
-		inventoryFilterButton.SetHoverMessage("Inventory filter");
-
-		traderFilterButton = new("TradeUIButton");
-		traderFilterButton.Init(0, 0, int(6 * UIScale), int(6 * UIScale));
-		traderFilterButton.SetDefaultIcon("fltroff");
-		traderFilterButton.SetActiveIcon("fltron");
-		traderFilterButton.SetAction('cycle_trader_filter');		
-		traderFilterButton.SetHoverMessage("Trader filter");
+		mainButtons.Clear();
+	
+		mainButtons.Push(makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "trade", 'do_trade', "Trade", "tradeButton"));
+		mainButtons.Push(makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "tradeoff", 'cancel_trade', "Clear", "cancelButton"));
+		mainButtons.Push(arrowUpButton("invUpButton", COL_INV));
+		mainButtons.Push(arrowDownButton("invDownButton", COL_INV));
+		mainButtons.Push(arrowUpButton("sellUpButton", COL_SELL));
+		mainButtons.Push(arrowDownButton("sellDownButton", COL_SELL));
+		mainButtons.Push(arrowUpButton("buyUpButton", COL_BUY));
+		mainButtons.Push(arrowDownButton("buyDownButton", COL_BUY));
+		mainButtons.Push(arrowUpButton("traderUpButton", COL_TRADER));
+		mainButtons.Push(arrowDownButton("traderDownButton", COL_TRADER));
+		mainButtons.Push(makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 2, "exttr", 'close_tradeui', "Leave", "exitButton"));
 		
-		exitButton = new("TradeUIButton");
-		exitButton.Init(0, 0, int(16 * UIScale), int(16 * UIScale));
-		exitButton.SetDefaultIcon("exttr");
-		exitButton.SetAction('close_tradeui');		
-		exitButton.SetHoverMessage("Leave");
+		// not pushing filters to mainButtons - they are separate
+		inventoryFilterButton = filterButton('cycle_inv_filter', "inventoryFilterButton");
+		traderFilterButton = filterButton('cycle_trader_filter', "traderFilterButton");
 
 	}
 
@@ -2330,20 +2365,13 @@ class TradeUIOverlay : EventHandler
 
 			return "";
 		}
+		
+		for (int i = 0; i < mainButtons.Size(); i++) {
+			if (mainButtons[i].IsInside(cursor.x, cursor.y)) return mainButtons[i].GetHoverMessage();
+		}
 
-		if (invUpButton.IsInside(cursor.x, cursor.y)) return invUpButton.GetHoverMessage();
-		if (invDownButton.IsInside(cursor.x, cursor.y)) return invDownButton.GetHoverMessage();
-		if (sellUpButton.IsInside(cursor.x, cursor.y)) return sellUpButton.GetHoverMessage();
-		if (sellDownButton.IsInside(cursor.x, cursor.y)) return sellDownButton.GetHoverMessage();
-		if (buyUpButton.IsInside(cursor.x, cursor.y)) return buyUpButton.GetHoverMessage();
-		if (buyDownButton.IsInside(cursor.x, cursor.y)) return buyDownButton.GetHoverMessage();
-		if (traderUpButton.IsInside(cursor.x, cursor.y)) return traderUpButton.GetHoverMessage();
-		if (traderDownButton.IsInside(cursor.x, cursor.y)) return traderDownButton.GetHoverMessage();
-		if (tradeButton.IsInside(cursor.x, cursor.y)) return tradeButton.GetHoverMessage();
-		if (cancelButton.IsInside(cursor.x, cursor.y)) return cancelButton.GetHoverMessage();
 		if (inventoryFilterButton.IsInside(cursor.x, cursor.y)) return inventoryFilterButton.GetHoverMessage();
 		if (traderFilterButton.IsInside(cursor.x, cursor.y)) return traderFilterButton.GetHoverMessage();
-		if (exitButton.IsInside(cursor.x, cursor.y)) return exitButton.GetHoverMessage();
 
 		return "";
 	}
@@ -2455,6 +2483,41 @@ class TradeUIOverlay : EventHandler
 		LayoutButtons();
 	}
 
+	void SetButtonLayout(TradeUIButton btn, int posx, int posy, int sizew, int sizeh)
+	{
+		if (btn != null)
+		{
+			btn.SetPos(posx, posy);
+			btn.SetSize(sizew, sizeh);
+		}
+	}
+
+	void SetScrollPairLayout(String buttonUpName, String buttonDownName, TradeItemColumn col, int listHeight, int btnW, int btnH)
+	{
+		if (col == null)
+			return;
+
+		int x = col.x + COLUMN_WIDTH + 2;
+		int y = col.y + listHeight - btnH * 2 + btnH/6;
+
+		SetButtonLayout(
+			FindButtonByName(buttonUpName, mainButtons),
+			x,
+			y - btnH / 2,
+			btnW,
+			btnH / 2
+		);
+
+		SetButtonLayout(
+			FindButtonByName(buttonDownName, mainButtons),
+			x,
+			y,
+			btnW,
+			btnH / 2
+		);
+	}
+
+
 	void LayoutButtons()
 	{
 		int listHeight = (MAX_VISIBLE - 1) * SLOT_STEP + SLOT_SIZE;
@@ -2470,45 +2533,51 @@ class TradeUIOverlay : EventHandler
 		
 		int exitW = int(16 * UIScale);
 		int exitH = int(16 * UIScale);
-
-		tradeButton.SetPos(midX - tradeW / 2, sellColumn.y + SLOT_STEP * 2);
-		tradeButton.SetSize(tradeW, tradeH);
-
-		cancelButton.SetPos(midX - tradeW / 2, tradeButton.y + tradeH + int(4 * UIScale));
-		cancelButton.SetSize(tradeW, tradeH);
-
-		invUpButton.SetPos(inventoryColumn.x + COLUMN_WIDTH + 2, inventoryColumn.y + listHeight - btnH - btnH/2);
-		invUpButton.SetSize(btnW, btnH / 2);
-
-		invDownButton.SetPos(inventoryColumn.x + COLUMN_WIDTH + 2, inventoryColumn.y + listHeight - btnH);
-		invDownButton.SetSize(btnW, btnH / 2);
-
-		sellUpButton.SetPos(sellColumn.x + COLUMN_WIDTH + 2, sellColumn.y + listHeight - btnH - btnH/2);
-		sellUpButton.SetSize(btnW, btnH / 2);
-
-		sellDownButton.SetPos(sellColumn.x + COLUMN_WIDTH + 2, sellColumn.y + listHeight - btnH);
-		sellDownButton.SetSize(btnW, btnH / 2);
-
-		buyUpButton.SetPos(buyColumn.x + COLUMN_WIDTH + 2, buyColumn.y + listHeight - btnH - btnH/2);
-		buyUpButton.SetSize(btnW, btnH / 2);
-
-		buyDownButton.SetPos(buyColumn.x + COLUMN_WIDTH + 2, buyColumn.y + listHeight - btnH);
-		buyDownButton.SetSize(btnW, btnH / 2);
-
-		traderUpButton.SetPos(traderColumn.x + COLUMN_WIDTH + 2, traderColumn.y + listHeight - btnH - btnH/2);
-		traderUpButton.SetSize(btnW, btnH / 2);
-
-		traderDownButton.SetPos(traderColumn.x + COLUMN_WIDTH + 2, traderColumn.y + listHeight - btnH);
-		traderDownButton.SetSize(btnW, btnH / 2);
 		
-		inventoryFilterButton.SetPos(inventoryColumn.x + COLUMN_WIDTH + 2, inventoryColumn.y);
-		inventoryFilterButton.SetSize(filterW, filterH);
-		
-		traderFilterButton.SetPos(traderColumn.x + COLUMN_WIDTH + 2, traderColumn.y);
-		traderFilterButton.SetSize(filterW, filterH);
-		
-		exitButton.SetPos(traderColumn.x + COLUMN_WIDTH + 60, traderColumn.y + listHeight/2 - exitH/2);
-		exitButton.SetSize(exitW, exitH);		
+		SetButtonLayout(
+			FindButtonByName("tradeButton", mainButtons), 
+			midX - tradeW / 2, 
+			sellColumn.y + SLOT_STEP * 2,
+			tradeW,
+			tradeH);
+
+		SetButtonLayout(
+			FindButtonByName("cancelButton", mainButtons), 
+			midX - tradeW / 2, 
+			sellColumn.y + tradeH + SLOT_STEP * 2 + 10,
+			tradeW,
+			tradeH);
+
+		SetButtonLayout(
+			inventoryFilterButton, 
+			inventoryColumn.x + COLUMN_WIDTH + 2, 
+			inventoryColumn.y,
+			filterW,
+			filterH
+			);	
+
+		SetButtonLayout(
+			traderFilterButton, 
+			traderColumn.x + COLUMN_WIDTH + 2, 
+			traderColumn.y,
+			filterW,
+			filterH
+			);	
+
+		SetButtonLayout(
+			FindButtonByName("exitButton", mainButtons), 
+			traderColumn.x + COLUMN_WIDTH + 60, 
+			traderColumn.y + listHeight/2 - exitH/2,
+			exitW,
+			exitH
+			);	
+
+		SetScrollPairLayout("invUpButton", "invDownButton", inventoryColumn, listHeight, btnW, btnH);
+		SetScrollPairLayout("sellUpButton", "sellDownButton", sellColumn, listHeight, btnW, btnH);
+		SetScrollPairLayout("buyUpButton", "buyDownButton", buyColumn, listHeight, btnW, btnH);
+		SetScrollPairLayout("traderUpButton", "traderDownButton", traderColumn, listHeight, btnW, btnH);
+
+
 	}
 
 	void CollectInventoryEntries(Actor owner, out Array<TradeUIItemEntry> outEntries)
@@ -2720,6 +2789,9 @@ class TradeUIOverlay : EventHandler
 
 		cursor.SetIcon(icon);
 		cursor.SetPos(vx, vy);
+		
+		TradeTextUtil.playSound('itmup');
+		
 		return true;
 	}
 
@@ -2875,14 +2947,14 @@ class TradeUIOverlay : EventHandler
 	}
 ///////////////////////
 
-	bool TryScrollButton(TradeUIButton button, TradeItemColumn col, bool up)
+	bool ProcessButtonArray(Array<TradeUIButton> buttons)
 	{
-		if (!ProcessButtonClick(button))
-			return false;
-
-		if (up) col.ScrollUp();
-		else col.ScrollDown();
-		return true;
+		for (int i = 0; i < buttons.Size(); i++)
+		{
+			if (ProcessButtonClick(buttons[i]))
+				return true;
+		}
+		return false;
 	}
 
 	bool ProcessButtons()
@@ -2890,20 +2962,12 @@ class TradeUIOverlay : EventHandler
 		if (qtyDialog.visible)
 			return ProcessQuantityDialogButtons();
 
-		if (TryScrollButton(invUpButton, inventoryColumn, true)) return true;
-		if (TryScrollButton(invDownButton, inventoryColumn, false)) return true;
-		if (TryScrollButton(sellUpButton, sellColumn, true)) return true;
-		if (TryScrollButton(sellDownButton, sellColumn, false)) return true;
-		if (TryScrollButton(buyUpButton, buyColumn, true)) return true;
-		if (TryScrollButton(buyDownButton, buyColumn, false)) return true;
-		if (TryScrollButton(traderUpButton, traderColumn, true)) return true;
-		if (TryScrollButton(traderDownButton, traderColumn, false)) return true;
-		if (ProcessButtonClick(tradeButton) || ProcessButtonClick(cancelButton))
+		if (ProcessButtonArray(mainButtons))
 			return true;
+
 		if (ProcessButtonClick(inventoryFilterButton)) return true;
 		if (ProcessButtonClick(traderFilterButton)) return true;
-		if (ProcessButtonClick(exitButton)) return true;
-		
+
 		return false;
 	}
 
@@ -2939,6 +3003,22 @@ class TradeUIOverlay : EventHandler
 		}
 		return false;
 	}
+
+	void ScrollColumn(int columnId, int direction)
+	{
+		TradeItemColumn col = null;
+
+		if (columnId == 0) col = inventoryColumn;
+		else if (columnId == 1) col = sellColumn;
+		else if (columnId == 2) col = buyColumn;
+		else if (columnId == 3) col = traderColumn;
+
+		if (col == null) return;
+
+		if (direction == 0) col.ScrollUp();
+		else col.ScrollDown(); 
+	}
+	
 
 	override void NetworkProcess(ConsoleEvent e)
 	{
@@ -3012,6 +3092,13 @@ class TradeUIOverlay : EventHandler
 			return;
 		}
 
+		if (e.Name == "scroll_button")
+		{
+			//Args[0]: 0 - inv, 1 - sell, 2 - buy, 3 - trader
+			//Args[1]: 0 - up, 1 - down
+			scrollColumn(e.Args[0],e.Args[1]);
+			return;
+		}
 		if (e.Name == "lmb_up")
 		{
 			int vx = e.Args[0];
@@ -3031,6 +3118,8 @@ class TradeUIOverlay : EventHandler
 
 			if (draggingItem)
 			{
+				TradeTextUtil.playSound('itmdn');
+
 				int hoveredCol = GetHoveredColumnId(vx, vy);
 				int targetCol = GetDropTargetForSource(dragSourceColumn);
 
@@ -3079,8 +3168,10 @@ class TradeUIOverlay : EventHandler
 			if (lmbHeld)
 			{
 				lmbHeld = false;
-				if (ProcessButtons())
+				if (ProcessButtons()) 
+				{
 					return;
+				}
 			}
 
 			return;
@@ -3167,8 +3258,7 @@ class TradeUIOverlay : EventHandler
 		{
 			infoMessage = "";
 			return;
-		}		
-		
+		}	
 	}
 
 	bool ProcessButtonClick(TradeUIButton button)
@@ -3179,6 +3269,7 @@ class TradeUIOverlay : EventHandler
 		if (button.IsInside(cursor.x, cursor.y))
 		{
 			button.Activate(self);
+			TradeTextUtil.playSound('btndn');
 			return true;
 		}
 
@@ -3357,6 +3448,9 @@ class TradeUIOverlay : EventHandler
 
 	ui void DrawButton(TradeUIButton btn, bool active = false)
 	{
+		if (btn == null)
+			return;
+
 		bool hov = false;
 		bool pressed = false;
 
@@ -3368,8 +3462,15 @@ class TradeUIOverlay : EventHandler
 
 		btn.Draw(hov, pressed, active);
 	}
-
-
+		
+	ui void DrawButtonArray(Array<TradeUIButton> buttons)
+	{
+		for (int i = 0; i < buttons.Size(); i++)
+		{
+			if (buttons[i] != null)
+				DrawButton(buttons[i]);
+		}
+	}
 
 	ui Name GetCurrentFilterUI(Array<Name> filterTypes, int filterIndex)
 	{ //ui helper
@@ -3440,16 +3541,7 @@ class TradeUIOverlay : EventHandler
 		DrawColumnName(buyColumn.x, buyColumn.y, "BUY");
 		DrawColumnName(traderColumn.x, traderColumn.y, "TRADER");
 
-		DrawButton(invUpButton);
-		DrawButton(invDownButton);
-		DrawButton(sellUpButton);
-		DrawButton(sellDownButton);
-		DrawButton(buyUpButton);
-		DrawButton(buyDownButton);
-		DrawButton(traderUpButton);
-		DrawButton(traderDownButton);
-		DrawButton(tradeButton);
-		DrawButton(cancelButton);
+		DrawButtonArray(mainButtons);
 		DrawButton(
 			inventoryFilterButton,
 			GetCurrentFilterUI(inventoryFilterTypes, inventoryFilterIndex) != 'all'
@@ -3458,7 +3550,6 @@ class TradeUIOverlay : EventHandler
 			traderFilterButton,
 			GetCurrentFilterUI(traderFilterTypes, traderFilterIndex) != 'all'
 		);
-		DrawButton(exitButton);
 
 		if (qtyDialog.visible)
 		{
