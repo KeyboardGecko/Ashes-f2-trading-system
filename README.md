@@ -7,7 +7,7 @@ A trading system just like in fallout 2? IN MY ASHES?!
 ## To implement it into your project
 
  1. Put everything from the `GameInfo` section into the `GameInfo` section of your mod's `MAPINFO` lump.
- 2. Put ```#include "zscript/AshesTradingSystem.zc"``` into `ZSCRIPT.ZC`. Don't forget to put `AshesTradingSystem.zc` `into zscript/`-folder of your mod.
+ 2. Put ```#include "zscript/AshesTradingSystem.zc"``` into `ZSCRIPT.ZC`. Don't forget to put `AshesTradingSystem.zc` into `zscript/` folder of your mod.
  3. Put everything that's left from every folder into the corresponding folder of your mod.
  
 OR just use mod launcher and launch this archive as a .pk3 with your mod.
@@ -27,7 +27,7 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
 		firstaid | First aid kit | This might come in handy if you're bleeding. | 10 | INVMA0
 		pipebomb | Pipebomb | A long, cold cylinder with explosive contents. | 10 | ROCKA0
 	 
- 2. Describe shops in TRADERS lump, like this:
+ 2. Describe shops in TRADERS lump like this:
 
 		trader <unique_shop_key>, <greed_modifier(optional)>
 		{
@@ -60,7 +60,9 @@ OR just use mod launcher and launch this archive as a .pk3 with your mod.
  
  The `"[-]"` tag is not displayed by the dialog - you'll see only `"Let me see what you have.".`
  Choosing this reply will forcefully interrupt the coversation and open trade interface, loading "Vance" shop.
- 
-Refer to TRADERS and TRADEITEMS lumps for detailed information.
 
+## Things to note:
+
+There's a global vendor price modifier in `AshesTradingSystem.zc`: GLOBAL_PRICE_MULT = 1. Change it if you want to make all vendors greedy.
+Refer to TRADERS and TRADEITEMS lumps for detailed information.
 Have fun.
