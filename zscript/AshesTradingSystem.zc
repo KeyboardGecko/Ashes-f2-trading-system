@@ -818,7 +818,6 @@ class TraderStateHandler : EventHandler
 // ============================================================
 //  UI Button
 // ============================================================
-
 class TradeUIButton : Object
 {
 	int x;
@@ -830,8 +829,7 @@ class TradeUIButton : Object
 	TextureID activeIcon;
 	TextureID iconPressed;
 
-	bool hasArgs;
-
+	bool doesHaveArgs;
 	int arg1;
 	int arg2;
 	int arg3;
@@ -853,8 +851,8 @@ class TradeUIButton : Object
 
 		visible = true;
 		enabled = true;
-		hasArgs = false;
 
+		doesHaveArgs = false;
 		arg1 = 0;
 		arg2 = 0;
 		arg3 = 0;
@@ -866,9 +864,17 @@ class TradeUIButton : Object
 		icon = TexMan.CheckForTexture("ITMDEF", TexMan.TYPE_Any);
 	}
 
+	void ClearArgs()
+	{
+		doesHaveArgs = false;
+		arg1 = 0;
+		arg2 = 0;
+		arg3 = 0;
+	}
+
 	void SetArgs(int narg1 = 0, int narg2 = 0, int narg3 = 0)
 	{
-		hasArgs = true;
+		doesHaveArgs = true;
 		arg1 = narg1;
 		arg2 = narg2;
 		arg3 = narg3;
@@ -994,20 +1000,38 @@ class TradeUIButton : Object
 			TradeDrawUtil.DrawTextureFitted(drawIcon, x, y, w, h, iconAlpha);
 	}
 
-	bool Activate(TradeUIOverlay owner)
+	Name GetActionEvent()
 	{
-		if (!visible || !enabled || owner == null)
-			return false;
+		return actionEvent;
+	}
 
-// 		PlayClickSound();
+	bool HasArgs()
+	{
+		return doesHaveArgs;
+	}
+
+	int GetArg1()
+	{
+		return arg1;
+	}
+
+	int GetArg2()
+	{
+		return arg2;
+	}
+
+	int GetArg3()
+	{
+		return arg3;
+	}
+
+	bool Activate()
+	{
+		if (!visible || !enabled)
+			return false;
 
 		if (actionEvent == '')
 			return false;
-
-		if (hasArgs)
-			owner.SendNetworkEvent(actionEvent, arg1, arg2, arg3);
-		else
-			owner.SendNetworkEvent(actionEvent);
 
 		return true;
 	}
@@ -1701,10 +1725,31 @@ class TradeQuantityDialog : Object
 	}
 }
 
+
 // ============================================================
-//  Main overlay
+//  Base overlay
 // ============================================================
-class TradeUIOverlay : EventHandler
+
+class BaseUIOverlay : EventHandler
+{
+	bool DispatchButtonEvent(Name actionEvent, bool hasArgs, int arg1, int arg2, int arg3)
+	{
+		if (actionEvent == '')
+			return false;
+
+		if (hasArgs)
+			SendNetworkEvent(actionEvent, arg1, arg2, arg3);
+		else
+			SendNetworkEvent(actionEvent);
+
+		return true;
+	}
+}
+
+// ============================================================
+//  Trade overlay
+// ============================================================
+class TradeUIOverlay : BaseUIOverlay
 {
 	const COL_INV = 0;
 	const COL_SELL = 1;
@@ -2169,6 +2214,23 @@ class TradeUIOverlay : EventHandler
 		OpenForTraderKey(npc.GetClassName());
 	}
 
+// 	bool ReleasePressedButton()
+// 	{
+// 		if (pressedButton == null)
+// 			return false;
+
+// 		let hovered = GetHoveredButton();
+// 		let btn = pressedButton;
+// 		pressedButton = null;
+
+// 		if (hovered != btn)
+// 			return false;
+
+// 		btn.Activate(self);
+// 		TradeTextUtil.playSound('btnup');
+// 		return true;
+// 	}
+		
 	bool ReleasePressedButton()
 	{
 		if (pressedButton == null)
@@ -2181,7 +2243,18 @@ class TradeUIOverlay : EventHandler
 		if (hovered != btn)
 			return false;
 
-		btn.Activate(self);
+		if (!btn.visible || !btn.enabled)
+			return false;
+
+		Name ev = btn.GetActionEvent();
+		if (ev == '')
+			return false;
+
+		if (btn.HasArgs())
+			SendNetworkEvent(ev, btn.GetArg1(), btn.GetArg2(), btn.GetArg3());
+		else
+			SendNetworkEvent(ev);
+
 		TradeTextUtil.playSound('btnup');
 		return true;
 	}
@@ -2280,19 +2353,6 @@ class TradeUIOverlay : EventHandler
 		return newButton;
 	}
 
-	
-	TradeUIButton arrowUpButton(String buttonName, int columnId){
-		TradeUIButton btn = makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "arrowup", 'scroll_button', "Scroll up", buttonName);
-		btn.SetArgs(columnId, 0);
-		return btn;
-	}
-
-	TradeUIButton arrowDownButton(String buttonName, int columnId){
-		TradeUIButton btn =  makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "arrowdn", 'scroll_button', "Scroll down", buttonName);
-		btn.SetArgs(columnId, 1);
-		return btn;
-	}	
-
 	TradeUIButton filterButton(Name setAction, String buttonName){
 		TradeUIButton btn = makeNewButton(6, 6, "fltroff", setAction, "Filters", buttonName);
 		btn.SetActiveIcon("fltron");
@@ -2309,27 +2369,65 @@ class TradeUIOverlay : EventHandler
 		}
 		return null;
 	}
-	
+
+	TradeUIButton AddMainButton(
+		int w,
+		int h,
+		String defaultIcon,
+		Name btnAction,
+		String hoverMessage,
+		String buttonName)
+	{
+		let btn = makeNewButton(w, h, defaultIcon, btnAction, hoverMessage, buttonName);
+		mainButtons.Push(btn);
+		return btn;
+	}
+
+	TradeUIButton scrollButton(String buttonName, int columnId, bool up)
+	{
+		TradeUIButton btn = makeNewButton(
+			SLOT_SIZE / 2,
+			SLOT_SIZE / 4,
+			up ? "arrowup" : "arrowdn",
+			'scroll_button',
+			up ? "Scroll up" : "Scroll down",
+			buttonName
+		);
+
+		btn.SetArgs(columnId, up ? 0 : 1);
+		return btn;
+	}
+
+	TradeUIButton AddScrollButton(String buttonName, int columnId, bool up)
+	{
+		let btn = scrollButton(buttonName, columnId, up);
+		mainButtons.Push(btn);
+		return btn;
+	}
+		
 	void InitializeButtons()
 	{
 		mainButtons.Clear();
-	
-		mainButtons.Push(makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "trade", 'do_trade', "Trade", "tradeButton"));
-		mainButtons.Push(makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "tradeoff", 'cancel_trade', "Clear", "cancelButton"));
-		mainButtons.Push(arrowUpButton("invUpButton", COL_INV));
-		mainButtons.Push(arrowDownButton("invDownButton", COL_INV));
-		mainButtons.Push(arrowUpButton("sellUpButton", COL_SELL));
-		mainButtons.Push(arrowDownButton("sellDownButton", COL_SELL));
-		mainButtons.Push(arrowUpButton("buyUpButton", COL_BUY));
-		mainButtons.Push(arrowDownButton("buyDownButton", COL_BUY));
-		mainButtons.Push(arrowUpButton("traderUpButton", COL_TRADER));
-		mainButtons.Push(arrowDownButton("traderDownButton", COL_TRADER));
-		mainButtons.Push(makeNewButton(SLOT_SIZE / 2, SLOT_SIZE / 2, "exttr", 'close_tradeui', "Leave", "exitButton"));
-		
-		// not pushing filters to mainButtons - they are separate
+
+		AddMainButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "trade", 'do_trade', "Trade", "tradeButton");
+		AddMainButton(SLOT_SIZE / 2, SLOT_SIZE / 4, "tradeoff", 'cancel_trade', "Clear", "cancelButton");
+
+		AddScrollButton("invUpButton", COL_INV, true);
+		AddScrollButton("invDownButton", COL_INV, false);
+
+		AddScrollButton("sellUpButton", COL_SELL, true);
+		AddScrollButton("sellDownButton", COL_SELL, false);
+
+		AddScrollButton("buyUpButton", COL_BUY, true);
+		AddScrollButton("buyDownButton", COL_BUY, false);
+
+		AddScrollButton("traderUpButton", COL_TRADER, true);
+		AddScrollButton("traderDownButton", COL_TRADER, false);
+
+		AddMainButton(SLOT_SIZE / 2, SLOT_SIZE / 2, "exttr", 'close_tradeui', "Leave", "exitButton");
+
 		inventoryFilterButton = filterButton('cycle_inv_filter', "inventoryFilterButton");
 		traderFilterButton = filterButton('cycle_trader_filter', "traderFilterButton");
-
 	}
 
 	clearscope String GetItemDescriptionByClass(Name cls) const
@@ -2996,241 +3094,13 @@ class TradeUIOverlay : EventHandler
 		else col.ScrollDown(); 
 	}
 	
-
 	override void NetworkProcess(ConsoleEvent e)
 	{
-		if (e.Name == "tradeui_toggle")
-		{
-			SetVisible(!visible);
-			return;
-		}
+		if (HandleOpenCloseEvents(e)) return;
+		if (HandleScrollEvents(e)) return;
+		if (HandleQuantityEvents(e)) return;
+		if (HandleMouseEvents(e)) return;
 
-		if (e.Name == "close_tradeui")
-		{
-			CloseTrade();
-			return;
-		}
-		
-		if (e.Name == "do_trade")
-		{
-			PerformTrade();
-			return;
-		}
-				
-		if (e.Name == "open_tradeui_id")
-		{
-			let reg = TraderRegistry.Get();
-			if (reg != null)
-			{
-				String key = reg.FindKeyByNetId(e.Args[0]);
-				if (key != "")
-				{
-					OpenForTraderKey(key);
-				}
-				else
-				{
-					Console.Printf("No trader for id %d", e.Args[0]);
-				}
-			}
-			return;
-		}
-			
-		if (e.Name == "open_tradeui_for")
-		{
-			let p = players[consoleplayer];
-			if (p != null && p.ConversationNPC != null)
-			{
-// 				Console.printf("Trader:, %s", p.ConversationNPC);
-				OpenForTraderActor(p.ConversationNPC);
-			}
-			else
-			{
-				infoMessage = "No trader.";
-			}
-			return;
-		}
-		
-		if (e.Name == "cancel_trade")
-		{
-			CancelTrade();
-			return;
-		}	
-		
-		if (e.Name == "scrollup_toggle" || e.Name == "mwheel_up")
-		{
-			ScrollHoveredColumn(e.Args[0], e.Args[1], true);
-			return;
-		}
-
-		if (e.Name == "scrolldown_toggle" || e.Name == "mwheel_down")
-		{
-			ScrollHoveredColumn(e.Args[0], e.Args[1], false);
-			return;
-		}
-
-		if (e.Name == "scroll_button")
-		{
-			//Args[0]: 0 - inv, 1 - sell, 2 - buy, 3 - trader
-			//Args[1]: 0 - up, 1 - down
-			scrollColumn(e.Args[0],e.Args[1]);
-			return;
-		}
-		if (e.Name == "lmb_up")
-		{
-			int vx = e.Args[0];
-			int vy = e.Args[1];
-
-			if (qtyDialog.visible)
-			{
-				cursor.SetPos(vx, vy);
-
-				if (lmbHeld)
-				{
-					lmbHeld = false;
-					if (ReleasePressedButton())
-						return;
-				}
-				return;
-			}
-
-			if (draggingItem)
-			{
-				TradeTextUtil.playSound('itmdn');
-
-				int hoveredCol = GetHoveredColumnId(vx, vy);
-				int targetCol = GetDropTargetForSource(dragSourceColumn);
-
-				if (hoveredCol == targetCol)
-				{
-					let src = GetColumnById(dragSourceColumn);
-					let dst = GetColumnById(targetCol);
-
-					if (src != null && dst != null)
-					{
-						let entry = src.GetEntry(selectedItemIndex);
-
-						if (entry != null)
-						{
-							if (entry.count > 1)
-							{
-								int sourceCol = dragSourceColumn;
-								int destCol = targetCol;
-
-								selectedItemIndex = -1;
-								draggingItem = false;
-								dragSourceColumn = COL_NONE;
-								selectedItemClass = '';
-								cursor.ClearIcon();
-
-								OpenQuantityDialog(entry, sourceCol, destCol);
-								return;
-							}
-
-							pendingSourceColumn = dragSourceColumn;
-							pendingTargetColumn = targetCol;
-							pendingItemClass = entry.cls;
-							pendingItemPrice = entry.price;
-							ExecuteTransferAmount(1);
-							return;
-						}					}
-				}
-			}
-
-			selectedItemIndex = -1;
-			draggingItem = false;
-			dragSourceColumn = COL_NONE;
-			selectedItemClass = '';
-			cursor.ClearIcon();
-
-			if (lmbHeld)
-			{
-				lmbHeld = false;
-				if (ReleasePressedButton())
-				{
-					return;
-				}
-			}
-
-			return;
-		}
-
-		if (e.Name == "lmb_down")
-		{
-			lmbHeld = true;
-
-			int vx = e.Args[0];
-			int vy = e.Args[1];
-
-			cursor.SetPos(vx, vy);
-
-			if (qtyDialog.visible)
-			{
-				pressedButton = GetHoveredButton();
-				if (pressedButton != null)
-				{
-					TradeTextUtil.playSound('btndn');
-					return;
-				}
-				return;
-			}
-
-			if (TryStartDragFromColumn(inventoryColumn, COL_INV, vx, vy)) return;
-			if (TryStartDragFromColumn(sellColumn, COL_SELL, vx, vy)) return;
-			if (TryStartDragFromColumn(buyColumn, COL_BUY, vx, vy)) return;
-			if (TryStartDragFromColumn(traderColumn, COL_TRADER, vx, vy)) return;
-
-			pressedButton = GetHoveredButton();
-			if (pressedButton != null)
-			{
-				TradeTextUtil.playSound('btndn');
-				return;
-			}
-
-			return;
-		}		
-		
-		if (e.Name == "qty_plus")
-		{
-			qtyDialog.AddOne();
-			return;
-		}
-
-		if (e.Name == "qty_minus")
-		{
-			qtyDialog.RemoveOne();
-			return;
-		}
-
-		if (e.Name == "qty_all")
-		{
-			qtyDialog.SetAll();
-			return;
-		}
-
-		if (e.Name == "qty_ok")
-		{
-			ExecuteTransferAmount(qtyDialog.quantity);
-			return;
-		}
-
-		if (e.Name == "qty_cancel")
-		{
-			CancelQuantityDialog();
-			return;
-		}
-		
-		if (e.Name == "qty_digit")
-		{
-			qtyDialog.AppendDigit(e.Args[0]);
-			return;
-		}
-
-		if (e.Name == "qty_backspace")
-		{
-			qtyDialog.BackspaceDigit();
-			return;
-		}
-		
 		if (e.Name == "cycle_inv_filter")
 		{
 			CycleFilter(inventoryFilterTypes, inventoryFilterIndex);
@@ -3247,15 +3117,251 @@ class TradeUIOverlay : EventHandler
 			CycleFilter(traderFilterTypes, traderFilterIndex);
 			RebuildTraderColumn();
 
-			infoMessage = "Filter: " .. GetCurrentFilter(traderFilterTypes, traderFilterIndex);		
+			infoMessage = "Filter: " .. GetCurrentFilter(traderFilterTypes, traderFilterIndex);
 			return;
 		}
-		
+
 		if (e.Name == "clr_infomessage")
 		{
 			infoMessage = "";
 			return;
-		}	
+		}
+	}
+
+	bool HandleOpenCloseEvents(ConsoleEvent e)
+	{
+		if (e.Name == "tradeui_toggle")
+		{
+			SetVisible(!visible);
+			return true;
+		}
+
+		if (e.Name == "close_tradeui")
+		{
+			SetVisible(false);
+			return true;
+		}
+
+		if (e.Name == "do_trade")
+		{
+			PerformTrade();
+			return true;
+		}
+
+		if (e.Name == "cancel_trade")
+		{
+			CancelTrade();
+			return true;
+		}
+
+		if (e.Name == "open_tradeui_id")
+		{
+			let reg = TraderRegistry.Get();
+			if (reg != null)
+			{
+				String key = reg.FindKeyByNetId(e.Args[0]);
+				if (key != "")
+					OpenForTraderKey(key);
+				else
+					Console.Printf("No trader for id %d", e.Args[0]);
+			}
+			return true;
+		}
+
+		if (e.Name == "open_tradeui_for")
+		{
+			let p = players[consoleplayer];
+			if (p != null && p.ConversationNPC != null)
+				OpenForTraderActor(p.ConversationNPC);
+			else
+				infoMessage = "No trader.";
+
+			return true;
+		}
+
+		return false;
+	}
+	
+	bool HandleScrollEvents(ConsoleEvent e)
+	{
+		if (e.Name == "scrollup_toggle" || e.Name == "mwheel_up")
+		{
+			ScrollHoveredColumn(e.Args[0], e.Args[1], true);
+			return true;
+		}
+
+		if (e.Name == "scrolldown_toggle" || e.Name == "mwheel_down")
+		{
+			ScrollHoveredColumn(e.Args[0], e.Args[1], false);
+			return true;
+		}
+
+		if (e.Name == "scroll_button")
+		{
+			//Args[0]: 0 - inv, 1 - sell, 2 - buy, 3 - trader
+			//Args[1]: 0 - up, 1 - down
+			ScrollColumn(e.Args[0], e.Args[1]);
+			return true;
+		}
+
+		return false;
+	}
+
+	bool HandleQuantityEvents(ConsoleEvent e)
+	{
+		if (e.Name == "qty_plus")
+		{
+			qtyDialog.AddOne();
+			return true;
+		}
+
+		if (e.Name == "qty_minus")
+		{
+			qtyDialog.RemoveOne();
+			return true;
+		}
+
+		if (e.Name == "qty_all")
+		{
+			qtyDialog.SetAll();
+			return true;
+		}
+
+		if (e.Name == "qty_ok")
+		{
+			ExecuteTransferAmount(qtyDialog.quantity);
+			return true;
+		}
+
+		if (e.Name == "qty_cancel")
+		{
+			CancelQuantityDialog();
+			return true;
+		}
+
+		if (e.Name == "qty_digit")
+		{
+			qtyDialog.AppendDigit(e.Args[0]);
+			return true;
+		}
+
+		if (e.Name == "qty_backspace")
+		{
+			qtyDialog.BackspaceDigit();
+			return true;
+		}
+
+		return false;
+	}
+
+	bool HandleMouseEvents(ConsoleEvent e)
+	{
+		if (e.Name == "lmb_down")
+		{
+			HandleLmbDown(e.Args[0], e.Args[1]);
+			return true;
+		}
+
+		if (e.Name == "lmb_up")
+		{
+			HandleLmbUp(e.Args[0], e.Args[1]);
+			return true;
+		}
+
+		return false;
+	}
+
+	void HandleLmbDown(int vx, int vy)
+	{
+		lmbHeld = true;
+		cursor.SetPos(vx, vy);
+
+		if (qtyDialog.visible)
+		{
+			pressedButton = GetHoveredButton();
+			if (pressedButton != null)
+				TradeTextUtil.playSound('btndn');
+			return;
+		}
+
+		if (TryStartDragFromColumn(inventoryColumn, COL_INV, vx, vy)) return;
+		if (TryStartDragFromColumn(sellColumn, COL_SELL, vx, vy)) return;
+		if (TryStartDragFromColumn(buyColumn, COL_BUY, vx, vy)) return;
+		if (TryStartDragFromColumn(traderColumn, COL_TRADER, vx, vy)) return;
+
+		pressedButton = GetHoveredButton();
+		if (pressedButton != null)
+			TradeTextUtil.playSound('btndn');
+	}
+
+	void HandleLmbUp(int vx, int vy)
+	{
+		cursor.SetPos(vx, vy);
+
+		if (qtyDialog.visible)
+		{
+			if (lmbHeld)
+			{
+				lmbHeld = false;
+				ReleasePressedButton();
+			}
+			return;
+		}
+
+		if (draggingItem)
+		{
+			int hoveredCol = GetHoveredColumnId(vx, vy);
+			int targetCol = GetDropTargetForSource(dragSourceColumn);
+
+			if (hoveredCol == targetCol)
+			{
+				let src = GetColumnById(dragSourceColumn);
+				let dst = GetColumnById(targetCol);
+
+				if (src != null && dst != null)
+				{
+					let entry = src.GetEntry(selectedItemIndex);
+					if (entry != null)
+					{
+						TradeTextUtil.playSound('itmdn');
+
+						if (entry.count > 1)
+						{
+							int sourceCol = dragSourceColumn;
+							int destCol = targetCol;
+
+							ResetDragState();
+							OpenQuantityDialog(entry, sourceCol, destCol);
+							return;
+						}
+
+						pendingSourceColumn = dragSourceColumn;
+						pendingTargetColumn = targetCol;
+						pendingItemClass = entry.cls;
+						pendingItemPrice = entry.price;
+						ExecuteTransferAmount(1);
+						return;
+					}
+				}
+			}
+		}
+
+		ResetDragState();
+
+		if (lmbHeld)
+		{
+			lmbHeld = false;
+			ReleasePressedButton();
+		}
+	}
+
+	void ResetDragState()
+	{
+		selectedItemIndex = -1;
+		draggingItem = false;
+		dragSourceColumn = COL_NONE;
+		selectedItemClass = '';
+		cursor.ClearIcon();
 	}
 
 	override bool UiProcess(UiEvent e)
@@ -3264,68 +3370,77 @@ class TradeUIOverlay : EventHandler
 			return false;
 
 		if (qtyDialog.visible)
+			return HandleQuantityUiEvent(e);
+
+		return HandleMainUiEvent(e);
+	}
+
+	ui bool HandleQuantityUiEvent(UiEvent e)
+	{
+		if (e.Type == UiEvent.Type_MouseMove)
 		{
-			if (e.Type == UiEvent.Type_MouseMove)
-			{
-				cursor.SetPos(e.MouseX, e.MouseY);
-				return true;
-			}
-
-			if (e.Type == UiEvent.Type_LButtonDown)
-			{
-				SendNetworkEvent("lmb_down", cursor.x, cursor.y);
-				return true;
-			}
-
-			if (e.Type == UiEvent.Type_LButtonUp)
-			{
-				SendNetworkEvent("lmb_up", cursor.x, cursor.y);
-				return true;
-			}
-
-			if (e.Type == UiEvent.Type_WheelUp)
-			{
-				SendNetworkEvent("qty_plus");
-				return true;
-			}
-
-			if (e.Type == UiEvent.Type_WheelDown)
-			{
-				SendNetworkEvent("qty_minus");
-				return true;
-			}
-
-			if (e.Type == UiEvent.Type_KeyDown)
-			{
-				if (e.KeyChar >= 48 && e.KeyChar <= 57) // 0..9
-				{
-					SendNetworkEvent("qty_digit", e.KeyChar - 48);
-					return true;
-				}
-
-				if (e.KeyChar == 8) // Backspace
-				{
-					SendNetworkEvent("qty_backspace");
-					return true;
-				}
-
-				if (e.KeyChar == 13) // Enter
-				{
-					SendNetworkEvent("qty_ok");
-					return true;
-				}
-
-				if (e.KeyChar == 27) // ESC
-				{
-					SendNetworkEvent("qty_cancel");
-					return true;
-				}
-			}
-
+			cursor.SetPos(e.MouseX, e.MouseY);
 			return true;
 		}
-		
-		if (e.Type == UiEvent.Type_MouseMove){
+
+		if (e.Type == UiEvent.Type_LButtonDown)
+		{
+			SendNetworkEvent("lmb_down", cursor.x, cursor.y);
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_LButtonUp)
+		{
+			SendNetworkEvent("lmb_up", cursor.x, cursor.y);
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_WheelUp)
+		{
+			SendNetworkEvent("qty_plus");
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_WheelDown)
+		{
+			SendNetworkEvent("qty_minus");
+			return true;
+		}
+
+		if (e.Type == UiEvent.Type_KeyDown)
+		{
+			if (e.KeyChar >= 48 && e.KeyChar <= 57)
+			{
+				SendNetworkEvent("qty_digit", e.KeyChar - 48);
+				return true;
+			}
+
+			if (e.KeyChar == 8)
+			{
+				SendNetworkEvent("qty_backspace");
+				return true;
+			}
+
+			if (e.KeyChar == 13)
+			{
+				SendNetworkEvent("qty_ok");
+				return true;
+			}
+
+			if (e.KeyChar == 27)
+			{
+				SendNetworkEvent("qty_cancel");
+				return true;
+			}
+		}
+
+		return true;
+	}	
+	
+	ui bool HandleMainUiEvent(UiEvent e)
+	{
+		if (e.Type == UiEvent.Type_MouseMove)
+		{
 			cursor.SetPos(e.MouseX, e.MouseY);
 
 			if (inventoryColumn.GetHoveredIndex(cursor.x, cursor.y) != -1 ||
@@ -3338,7 +3453,7 @@ class TradeUIOverlay : EventHandler
 
 			return true;
 		}
-		
+
 		if (e.Type == UiEvent.Type_LButtonDown)
 		{
 			SendNetworkEvent("lmb_down", cursor.x, cursor.y);
@@ -3386,7 +3501,6 @@ class TradeUIOverlay : EventHandler
 
 		return true;
 	}
-	
 	ui void DrawDecorativeTexture(TextureID tex, double x, double y)
 	{
 		Screen.DrawTexture(tex, false, x, y,
